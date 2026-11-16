@@ -3,7 +3,8 @@ import type { Store, Video } from '../data/types'
 import { uid } from '../data/template'
 import { Modal } from './Modal'
 import { Field, Media, Pill, DriveLink } from './ui'
-import type { GenKit } from '../data/types'
+import type { GenKit, GateState, VideoFlow } from '../data/types'
+import { FlowGates } from './VideoFlowTab'
 
 interface Props {
   store: Store
@@ -45,7 +46,7 @@ export function CreativeBoard({ store, onChange }: Props) {
           {view === 'list' ? (
                 <div className="vlist-wrap">
                   <table className="vlist">
-                    <thead><tr><th>ID</th><th>Video</th><th>Nguồn</th><th>Prompt</th><th>Ref</th><th /></tr></thead>
+                    <thead><tr><th>ID</th><th>Video</th><th>Nguồn</th><th>Prompt</th><th>Ref</th><th>last_updated</th><th /></tr></thead>
                     <tbody>
                       {shown.map((v) => {
                         const k = v.kit
@@ -56,15 +57,17 @@ export function CreativeBoard({ store, onChange }: Props) {
                         const hasRef = slots.some(([, f]) => f?.length)
                         return (
                           <tr key={v.id}>
-                            <td className="vl-id"><div className="vl-scroll"><b>{v.id}</b>{!v.media && <div><Pill tone="warn">Draft</Pill></div>}<div className="note">{v.title}</div></div></td>
+                            <td className="vl-id"><div className="vl-scroll"><b>{v.id}</b>{!v.media && <div><Pill tone="warn">Draft</Pill></div>}<FlowGates v={v} /><div className="note">{v.title}</div></div></td>
                             <td className="vl-media">{v.media ? <Media src={v.media} /> : <div className="thumb">Chưa có</div>}</td>
                             <td className="vl-src"><div className="vl-scroll">{items.length ? <ul>{items.map((t) => <li key={t}>{t}</li>)}</ul> : <span className="note">Trống</span>}{links.map((x) => <div key={x.label}><a href={x.text} target="_blank" rel="noreferrer">{x.label} ↗</a></div>)}</div></td>
-                            <td className="vl-prompt"><div className="vl-scroll">{k?.prompt ? <p className="note pre">{k.prompt}</p> : <span className="note">Không có</span>}</div></td>
+                            <td className="vl-prompt">{k?.prompt && <CopyBtn text={k.prompt} label="Copy all prompt" />}<div className="vl-scroll">{k?.prompt ? <p className="note pre">{k.prompt}</p> : <span className="note">Không có</span>}</div></td>
                             <td className="vl-ref"><div className="vl-scroll">
-                              {slots.map(([label, files]) => files?.length ? <div key={label}><b>{label}</b><div className="kitrow">{files.map((f) => <div key={f}><Media src={f} /><p className="note">{f.split('/').pop()}</p></div>)}</div></div> : null)}
+                              {slots.map(([label, files]) => files?.length ? <div key={label}><b>{label}</b><div className="kitrow">{files.map((f) => <div key={f}><Media src={f} /><p className="note">{f.split('/').pop()}</p><div className="note"><a href={/^https?:/.test(f) ? f : `/media/${f.split('/').map(encodeURIComponent).join('/')}`} target="_blank" rel="noreferrer">Mở file</a> · {!/^https?:/.test(f) && <><a href={`/media/${f.split('/').map(encodeURIComponent).join('/')}?download=1`} download>Tải về</a> · </>}<DriveLink src={f} /></div></div>)}</div></div> : null)}
                               {!hasRef && <span className="note">Không có file</span>}
+                              <RefActions id={v.id} kit={k} />
                               {notes.map((x) => <p key={x.label} className="note pre">{x.text}</p>)}
                             </div></td>
+                            <td className="vl-upd">{v.last_updated ?? <span className="note">—</span>}</td>
                             <td className="vl-act"><button className="link" onClick={() => setEditing(v)}>Sửa</button><button className="link bad" onClick={() => { if (window.confirm(`Xóa ${v.id}?`)) remove(v.id) }}>Xóa</button></td>
                           </tr>
                         )
@@ -88,12 +91,15 @@ export function CreativeBoard({ store, onChange }: Props) {
                           <Pill tone={v.status === 'Đã qua cổng' ? 'ok' : 'warn'}>{v.status}</Pill>
                           <Pill>Cổng {v.gate}</Pill>
                         </div>
+                        <FlowGates v={v} />
+                        {v.flowNote && <p className="note full"><b>Flow / quyền:</b> {v.flowNote}</p>}
                         <div>{v.title}</div>
+                        {v.last_updated && <div className="note full"><b>last_updated:</b> {v.last_updated}</div>}
                         {v.format && <div className="note full"><b>Format:</b> {v.format}</div>}
                         {v.hook && <div className="note full"><b>Hook:</b> {v.hook}</div>}
                         {v.step && <p className="note full"><b>Bước hiện tại:</b> {v.step}</p>}
                         {v.note && <p className="note pre full">{v.note}</p>}
-                        {v.kit && <Kit kit={v.kit} />}
+                        {v.kit && <Kit kit={v.kit} id={v.id} />}
                         <div className="rowact">
                           <button className="link" onClick={() => setEditing(v)}>Sửa</button>
                           <button className="link bad" onClick={() => remove(v.id)}>Xóa</button>
@@ -118,6 +124,8 @@ const TOOLS = ['Higgsfield Marketing Studio', 'Higgsfield Genjutsu', 'Muse (muse
 const MODES = ['', 'UGC Selfie Testimonial', 'Camera POV', 'Mess to Fresh', 'Unboxing', 'Khác']
 const HOOKS = ['', 'Spicy', 'Product Crash', 'Epic Fail', 'Không hook']
 const SETTINGS = ['', 'Bedroom', 'Nature', 'Roofing', 'Living room', 'Office', 'Khác']
+const FLOWS = ['', '1', '2a', '2b', '3']
+const GATE_STATES = ['Chưa review', 'Đạt', 'Không đạt', 'Không áp dụng']
 const lines = (t: string) => t.split('\n').map((x) => x.trim()).filter(Boolean)
 
 function VideoForm({ video, onSave, onDelete, onClose }: { video?: Video; onSave: (v: Video) => void; onDelete: (id: string) => void; onClose: () => void }) {
@@ -139,13 +147,17 @@ function VideoForm({ video, onSave, onDelete, onClose }: { video?: Video; onSave
   const [refVideo, setRefVideo] = useState((k?.referenceVideo ?? []).join('\n'))
   const [refImg, setRefImg] = useState((k?.product ?? []).join('\n'))
   const [media, setMedia] = useState(video?.media ?? '')
+  const [flow, setFlow] = useState<VideoFlow | ''>(video?.flow ?? '')
+  const [gA, setGA] = useState<GateState>(video?.gates?.A ?? 'Chưa review')
+  const [gC, setGC] = useState<GateState>(video?.gates?.C ?? 'Chưa review')
+  const [gB, setGB] = useState<GateState>(video?.gates?.B ?? 'Chưa review')
 
   const save = () => {
     if (!id.trim()) return
     const fields = { mode, hook, setting, product, avatar, duration, resolution, aspect, audio }
     const config = [mode && `Mode ${mode}`, hook && `Hook ${hook}`, setting && `Setting ${setting}`, product && `Product ${product}`, avatar && `Avatar ${avatar}`, resolution, duration, aspect, `Audio ${audio.toLowerCase()}`].filter(Boolean).join(' · ')
     const kit = { ...video?.kit, tool, config, fields, prompt, referenceVideo: lines(refVideo), product: lines(refImg) }
-    onSave({ gate: 'C', status: 'Chưa qua cổng', ...video, id: id.trim(), title: title.trim() || id.trim(), media: media.trim() || undefined, kit })
+    onSave({ gate: 'C', status: 'Chưa qua cổng', ...video, last_updated: new Date().toISOString().slice(0, 10), id: id.trim(), title: title.trim() || id.trim(), media: media.trim() || undefined, kit, flow: flow || undefined, gates: { A: gA, C: gC, B: gB } })
   }
   const sel = (v: string, set: (x: string) => void, opts: string[]) => (
     <select value={v} onChange={(e) => set(e.target.value)}>{opts.map((o) => <option key={o} value={o}>{o || '—'}</option>)}</select>
@@ -157,6 +169,12 @@ function VideoForm({ video, onSave, onDelete, onClose }: { video?: Video; onSave
       <div className="grid2">
         <Field label="Mã"><input id="v-id" value={id} disabled={!!video} onChange={(e) => setId(e.target.value)} /></Field>
         <Field label="Công cụ">{sel(tool, setTool, TOOLS)}</Field>
+        <Field label="Flow (KAN-102)">{sel(flow, (x) => setFlow(x as VideoFlow | ''), FLOWS)}</Field>
+      </div>
+      <div className="grid2">
+        <Field label="Cổng A · prompt">{sel(gA, (x) => setGA(x as GateState), GATE_STATES)}</Field>
+        <Field label="Cổng C · ảnh neo">{sel(gC, (x) => setGC(x as GateState), GATE_STATES)}</Field>
+        <Field label="Cổng B · video">{sel(gB, (x) => setGB(x as GateState), GATE_STATES)}</Field>
       </div>
       <Field label="Tên / angle"><input id="v-title" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
       <div className="grid2">
@@ -183,7 +201,45 @@ function VideoForm({ video, onSave, onDelete, onClose }: { video?: Video; onSave
   )
 }
 
-export function Kit({ kit }: { kit: GenKit }) {
+
+function CopyBtn({ text, label }: { text: string; label: string }) {
+  const [ok, setOk] = useState(false)
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); setOk(true); setTimeout(() => setOk(false), 2000) } catch { window.prompt('Copy prompt:', text) }
+  }
+  return <button className="btn pri" onClick={copy}>{ok ? 'Đã copy ✓' : label}</button>
+}
+
+function RefActions({ id, kit }: { id: string; kit?: GenKit }) {
+  const [msg, setMsg] = useState('')
+  const paths = [...(kit?.referenceVideo ?? []), ...(kit?.character ?? []), ...(kit?.product ?? [])].filter((f) => !/^https?:/.test(f))
+  if (!paths.length) return null
+  const openFolder = async () => {
+    try {
+      const r = await fetch('/open-refs', { method: 'POST', body: JSON.stringify({ name: id, paths }) })
+      const j = await r.json()
+      setMsg(r.ok ? `Đã mở thư mục: ${j.dest}` : (j.error ?? 'Lỗi'))
+    } catch { setMsg('Chỉ chạy khi Store Hub dev đang bật') }
+  }
+  const downloadAll = () => paths.forEach((f, i) => setTimeout(() => {
+    const a = document.createElement('a')
+    a.href = `/media/${f.split('/').map(encodeURIComponent).join('/')}?download=1`
+    a.download = ''
+    document.body.appendChild(a); a.click(); a.remove()
+  }, i * 400))
+  return (
+    <div className="kitslot">
+      <b>Ref để upload ({paths.length} file)</b>
+      <div className="rowact">
+        <button className="btn pri" onClick={openFolder}>Mở thư mục ref (Finder)</button>
+        <button className="btn" onClick={downloadAll}>Tải tất cả</button>
+      </div>
+      {msg && <p className="note">{msg}</p>}
+    </div>
+  )
+}
+
+export function Kit({ kit, id }: { kit: GenKit; id?: string }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     try { await navigator.clipboard.writeText(kit.prompt ?? ''); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { window.prompt('Copy prompt:', kit.prompt) }
@@ -191,7 +247,7 @@ export function Kit({ kit }: { kit: GenKit }) {
   const Slot = ({ label, files }: { label: string; files?: string[] }) => (
     <div className="kitslot">
       <b>{label}</b>
-      {files && files.length ? <div className="kitrow">{files.map((f) => <div key={f}><Media src={f} /><p className="note">{f.split('/').pop()}</p><a href={/^https?:/.test(f) ? f : `/media/${f.split('/').map(encodeURIComponent).join('/')}`} target="_blank" rel="noreferrer">Mở file</a> · <DriveLink src={f} /></div>)}</div> : <p className="note">Không có</p>}
+      {files && files.length ? <div className="kitrow">{files.map((f) => <div key={f}><Media src={f} /><p className="note">{f.split('/').pop()}</p><a href={/^https?:/.test(f) ? f : `/media/${f.split('/').map(encodeURIComponent).join('/')}`} target="_blank" rel="noreferrer">Mở file</a> · {!/^https?:/.test(f) && <><a href={`/media/${f.split('/').map(encodeURIComponent).join('/')}?download=1`} download>Tải về</a> · </>}<DriveLink src={f} /></div>)}</div> : <p className="note">Không có</p>}
     </div>
   )
   return (
@@ -200,6 +256,7 @@ export function Kit({ kit }: { kit: GenKit }) {
       <Slot label="1. Reference video" files={kit.referenceVideo} />
       <Slot label="2. Character" files={kit.character} />
       <Slot label="3. Product" files={kit.product} />
+      {id && <RefActions id={id} kit={kit} />}
       {kit.extra?.map((x) => <div className="kitslot" key={x.label}><b>{x.label}</b><p className="note pre full">{x.text}</p></div>)}
       <div className="kitslot">
         <b>4. Prompt</b>

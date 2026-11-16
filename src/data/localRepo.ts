@@ -1,8 +1,28 @@
 import type { Store } from './types'
 import type { StoreRepo } from './repo'
-import { SEED_STORES } from './seed'
+import { SEED_STORES } from 'virtual:working-data'
 
 const KEY = 'store-hub:v1'
+
+// Seed mới hơn thì lấy seed, NHƯNG giữ phần người dùng đã sửa trong UI: trạng thái/link/ngày của bài social đã đăng hoặc đã lên lịch,
+// trạng thái + link + handle của kênh, bài social do người dùng tự tạo (không có trong seed). Creative lấy theo seed (xoá trong seed thì mất).
+function mergeKeepUserEdits(seed: Store, old: Store): Store {
+  try {
+    for (const k of Object.keys(seed.social) as (keyof Store['social'])[]) {
+      const sc = seed.social[k]
+      const oc = old.social?.[k]
+      if (!oc) continue
+      if (oc.status && oc.status !== 'Chưa tạo' && (sc.status === 'Chưa tạo' || oc.status === 'Đã đăng bài đầu')) sc.status = oc.status
+      for (const f of ['url', 'handle', 'email'] as const) if (oc[f] && !sc[f]) sc[f] = oc[f]
+      for (const op of oc.posts ?? []) {
+        const sp = sc.posts.find((x) => x.id === op.id)
+        if (!sp) { sc.posts.push(op); continue }
+        if (op.status !== 'Chưa đăng' || op.url) { sp.status = op.status; sp.url = op.url; sp.date = op.date }
+      }
+    }
+  } catch { /* nếu cấu trúc lạ thì dùng seed nguyên bản */ }
+  return seed
+}
 
 function read(): Store[] {
   try {
@@ -12,7 +32,7 @@ function read(): Store[] {
       // Store trong seed có seedRev mới hơn bản đã lưu thì lấy bản seed (các store khác giữ nguyên)
       return stored.map((s) => {
         const seed = SEED_STORES.find((x) => x.id === s.id)
-        return seed?.seedRev && seed.seedRev > (s.seedRev ?? 0) ? structuredClone(seed) : s
+        return seed?.seedRev && seed.seedRev > (s.seedRev ?? 0) ? mergeKeepUserEdits(structuredClone(seed), s) : s
       })
     }
   } catch {

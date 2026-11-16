@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { dashboardRepo } from '../data'
 import type { DashboardData, DashLink, DashTask, DashWidget } from '../data/dashboardTypes'
+import { Preview } from './TikTok'
 
 const WD = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -16,27 +17,41 @@ function DueChip({ due }: { due: string }) {
   return <span className={`pill ${cls}`}>{d < 0 ? `trễ ${-d} ngày` : d === 0 ? 'hôm nay' : `${fmtDM(due)} · ${d}d`}</span>
 }
 
+/** Đường dẫn tuyệt đối cũ hoặc tương đối (chuẩn mới, từ Working/) → đường dẫn tương đối từ thư mục "working" (cho /preview/). */
+const relWorking = (p: string) => { if (!p.startsWith('/')) return p; const i = p.indexOf('/working/'); return i < 0 ? null : p.slice(i + 9) }
+
 function Links({ list, miss }: { list?: DashLink[]; miss: string }) {
+  const [pv, setPv] = useState<{ path: string; title: string } | null>(null)
   if (!list?.length) return <span className="db-unv">{miss}</span>
   return (
     <>
-      {list.map((l, i) =>
-        l.url && /^https:\/\//.test(l.url)
-          ? <a key={i} className="db-lk" href={l.url} target="_blank" rel="noreferrer">{l.label}</a>
-          : <span key={i} className="db-lk" title={l.path}>{l.label}</span>,
-      )}
+      {list.map((l, i) => {
+        if (l.url && /^https:\/\//.test(l.url)) return <a key={i} className="db-lk" href={l.url} target="_blank" rel="noreferrer">{l.label}</a>
+        const rel = l.path && !l.path.endsWith('/') ? relWorking(l.path) : null
+        return rel
+          ? <button key={i} className="db-lk db-pv" title={`Xem trước: ${rel}`} onClick={() => setPv({ path: rel, title: l.label })}>{l.label}</button>
+          : <span key={i} className="db-lk" title={l.path}>{l.label}</span>
+      })}
+      {pv && <Preview path={pv.path} title={pv.title} onClose={() => setPv(null)} />}
     </>
   )
 }
 
-const NOTE_LABELS: [keyof NonNullable<DashTask['notes']>, string][] = [['progress', 'Progress'], ['next', 'Next'], ['blocker', 'Blocker'], ['note', 'Note']]
+const NOTE_LABELS: [keyof NonNullable<DashTask['notes']>, string][] = [
+  ['objective', 'Mục tiêu'],
+  ['progress', 'Hiện tại'],
+  ['done', 'Đã xong'],
+  ['next', 'Tiếp theo'],
+  ['blocker', 'Đang chờ'],
+  ['note', 'Ghi chú'],
+]
 
 function TaskRow({ t, focus }: { t: DashTask; focus: boolean }) {
   // Hạn chỉ làm nổi bật khi còn ≤ 3 ngày hoặc đã trễ (Amin, 09/11).
   const hot = !!t.due && daysTo(t.due) <= 3
   const notes = NOTE_LABELS.filter(([k]) => t.notes?.[k])
   const [open, setOpen] = useState(false)
-  const long = notes.reduce((n, [k]) => n + (t.notes?.[k]?.length ?? 0), 0) > 220
+  const long = notes.reduce((n, [k]) => n + (t.notes?.[k]?.length ?? 0), 0) > 330
   return (
     <tr className={`db-r${focus ? ' focus' : ''}${hot ? ' hot' : ''}`}>
       <td data-label="Jira · Task">
@@ -51,8 +66,9 @@ function TaskRow({ t, focus }: { t: DashTask; focus: boolean }) {
       <td data-label="Progress">
         {notes.length
           ? <>
-              <div className={`db-notes${long && !open ? ' clamp' : ''}`}>{notes.map(([k, l]) => <div key={k}><em>{l}</em>{t.notes?.[k]}</div>)}</div>
+              <div className={`db-notes${long && !open ? ' clamp' : ''}`}>{notes.map(([k, l]) => <div key={k}><em className={`nl-${k}`}>{l}</em>{t.notes?.[k]}</div>)}</div>
               {long && <button className="link" onClick={() => setOpen(!open)}>{open ? 'Thu gọn' : 'Xem thêm'}</button>}
+              {t.progressFile && <div><Links list={[t.progressFile]} miss="" /></div>}
             </>
           : <span className="db-unv">—</span>}
       </td>
@@ -205,6 +221,7 @@ export function Dashboard() {
 
   const t = new Date()
   const doing = [...data.tasks].sort((a, b) => Number(b.key === data.focus) - Number(a.key === data.focus))
+  const doneDetail = data.done.filter((x) => x.notes || x.progressFile || x.outputs?.length)
   const queued = tab === 'idea' ? data.idea : data.todo
   const lu = new Date(data.lastUpdate.at)
   return (
@@ -227,6 +244,12 @@ export function Dashboard() {
             <button className="link" onClick={() => setHide(!hide)}>{hide ? 'Hiện' : 'Ẩn'}</button>
           </div>
           {!hide && <TaskTable title={tab === 'idea' ? 'Idea' : 'To do'} tasks={queued} focus={data.focus} grouped />}
+          {doneDetail.length > 0 && (
+            <details className="more">
+              <summary>Đã xong gần đây, có chi tiết ({doneDetail.length})</summary>
+              <TaskTable title="Done" tasks={doneDetail} focus={null} />
+            </details>
+          )}
         </div>
       </section>
       <div className="db-wg">{data.widgets.map((w) => <WidgetCard key={w.id} w={w} />)}</div>

@@ -8,6 +8,8 @@ import { CreativeBoard } from '../components/CreativeBoard'
 import { ChecklistPanel } from '../components/ChecklistPanel'
 import { TaskAgents } from '../components/TaskAgents'
 import { SocialChannels } from '../components/SocialChannels'
+import { ShopifyPreviewTab } from '../components/ShopifyPreviewTab'
+import { VideoFlowTab } from '../components/VideoFlowTab'
 
 interface Props {
   store: Store
@@ -16,7 +18,7 @@ interface Props {
   onRemove: (id: string) => Promise<void>
 }
 
-type Tab = 'product' | 'creative' | 'social' | 'tasks'
+type Tab = 'product' | 'creative' | 'flow' | 'social' | 'shopify' | 'tasks'
 
 export function StoreDetail({ store, onBack, onSave, onRemove }: Props) {
   const [tab, setTab] = useState<Tab>('product')
@@ -24,7 +26,9 @@ export function StoreDetail({ store, onBack, onSave, onRemove }: Props) {
   const tabs: Array<[Tab, string]> = [
     ['product', 'Product info'],
     ['creative', 'Creative'],
+    ['flow', 'Video flow'],
     ['social', 'Social'],
+    ['shopify', 'Preview Shopify'],
     ['tasks', 'Task & agent'],
   ]
 
@@ -64,6 +68,8 @@ export function StoreDetail({ store, onBack, onSave, onRemove }: Props) {
       <div className="stack">
         {tab === 'product' && <ProductInfoTable store={store} onChange={onSave} />}
         {tab === 'creative' && <CreativeBoard store={store} onChange={onSave} />}
+        {tab === 'flow' && <VideoFlowTab store={store} />}
+        {tab === 'shopify' && <ShopifyPreviewTab store={store} />}
         {tab === 'tasks' && <TaskAgents store={store} onChange={onSave} />}
         {tab === 'social' && <SocialChannels key={`${store.id}-${store.updated}`} store={store} onChange={onSave} />}
       </div>

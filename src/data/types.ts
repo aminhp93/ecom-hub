@@ -7,6 +7,27 @@ export type PostStatus = 'Chưa đăng' | 'Đã lên lịch' | 'Đã đăng'
 export type PostFormat = 'Video ngắn' | 'Video dài' | 'Ảnh' | 'Bài viết'
 export type Gate = 'A' | 'B' | 'C'
 export type VideoStatus = 'Chưa qua cổng' | 'Đã qua cổng'
+// KAN-102: cách tạo video (docs/3-creative/8-video-flows.md). 1 ảnh + prompt có biến; 2a rút cấu trúc ref bằng chữ rồi gen bằng Flow 1; 2b upload video ref (chỉ ref có quyền); 3 remix asset sạch quyền.
+export type VideoFlow = '1' | '2a' | '2b' | '3'
+export type GateState = 'Đạt' | 'Không đạt' | 'Chưa review' | 'Không áp dụng'
+export type GateKey = 'A' | 'C' | 'B'
+export type RightsStatus = 'owned' | 'licensed' | 'permitted' | 'unknown' | 'not_permitted'
+export type LedgerStatus = 'approved' | 'pending' | 'blocked'
+
+// Một dòng asset ledger (theo 0-dashboard/task-hub/KAN-102/output/05b-ASSET-LEDGER-mau.csv)
+export interface AssetLedgerRow {
+  asset_id: string
+  type: string
+  description: string
+  file_path?: string
+  source_type: string
+  source_ref?: string
+  rights_status: RightsStatus
+  status: LedgerStatus
+  flow?: string
+  used_in_video?: string
+  notes?: string
+}
 
 export interface ProductInfoItem {
   n: number
@@ -30,8 +51,15 @@ export interface Video {
   note?: string
   // Đường dẫn video/ảnh tính từ thư mục working (dev) hoặc URL https
   media?: string
+  // Ngày cập nhật gần nhất (YYYY-MM-DD); tự ghi khi lưu trong UI
+  last_updated?: string
   // Bộ đầu vào cho công cụ gen (vd Higgsfield Genjutsu): video tham chiếu, nhân vật, sản phẩm, prompt. Thiếu thì UI ghi "Không có".
   kit?: GenKit
+  // KAN-102: flow tạo video và trạng thái cổng A (prompt) / C (ảnh neo) / B (video)
+  flow?: VideoFlow
+  gates?: Partial<Record<GateKey, GateState>>
+  // Ghi chú về flow/quyền ref (vd ref chưa rõ quyền, đề xuất gỡ bài)
+  flowNote?: string
 }
 
 export interface GenKit {
@@ -127,6 +155,8 @@ export interface Store {
   social: Record<ChannelKey, Channel>
   // Task Jira liên quan và các agent (Claude, Muse, Amin...) đang làm từng task
   tasks?: TaskLink[]
+  // KAN-102: asset ledger của store (ảnh, video, nhạc dùng để làm video và quyền dùng)
+  assetLedger?: AssetLedgerRow[]
 }
 
 export const CHANNELS: Record<ChannelKey, string> = {

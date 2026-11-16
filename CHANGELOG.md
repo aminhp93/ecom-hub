@@ -2,6 +2,24 @@
 
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Bản nháp cho release đầu tiên, soạn 2026-11-10 từ code hiện tại và lịch sử làm việc (KAN-83, 84, 87, 89, 90, 91, 92). `version` trong `package.json` đã đặt `0.0.1`. Chưa gắn tag git (thư mục này chưa là git repo).
 
+## [Unreleased]
+
+### Thêm
+- Tab **Video flow** trong chi tiết store (KAN-102, 13/11/2026), đặt sau tab Creative:
+  - Router 3 flow (Flow 1 ảnh + prompt có biến, Flow 2 video ref với 2a/2b, Flow 3 remix asset sạch quyền), workflow mặc định 2a → 1 → 3, thứ tự fallback và bằng chứng P0; tóm tắt từ `1-dropship/docs/3-creative/8-video-flows.md` v1.0, nằm ở `src/data/videoFlows.ts` (sửa doc thì cập nhật file này).
+  - Bảng flow + cổng A/C/B của từng creative, đếm số video theo flow.
+  - Bảng **asset ledger** (asset_id, loại, nguồn, rights_status, status, flow · dùng ở, ghi chú) đọc từ trường mới `assetLedger` của store trong `seed.ts`; dữ liệu lấy từ `0-dashboard/task-hub/KAN-102/output/05b-ASSET-LEDGER-mau.csv` (14 dòng: WW 8, AN 2, HB 4; người kiểm và ngày kiểm còn "(mẫu)", chưa dòng nào approved).
+- Creative có thêm trường `flow` (1 / 2a / 2b / 3), `gates` (A prompt, C ảnh neo, B video: Đạt / Không đạt / Chưa review / Không áp dụng) và `flowNote`; hiện thành pill ở cả dạng danh sách và dạng thẻ, sửa được trong form creative.
+  - Flow của 75 video cũ được **gán hồi tố** theo công cụ và ref trong kit (chưa xác minh từng video): Genjutsu / replace object có video nguồn → 2b (kèm cảnh báo ref chưa rõ quyền hoặc của đối thủ; A22 và HR-B6 ghi đề xuất gỡ bài theo quyết định 13/11, Amin làm); A24 (WW) và HR-D1-FLOW → 2a; còn lại → 1. FB-PROFILE không gắn flow.
+  - Cổng: "Đạt" khi trạng thái cũ là "Đã qua cổng" (và PT1-A12 v3 Đạt có ghi chú); R7-V13-FLOW cổng B "Không đạt"; còn lại "Chưa review".
+- Thêm creative **WW-P0-F3-route-v1** (Flow 3, 14,4 s, 0 credit, file trong `0-dashboard/task-hub/KAN-102/output/pilot-P0/`), chưa review cổng B, chưa đăng.
+- `seedRev`: WhiskerWall 18 → 19, AquaNest 23 → 24, HeartBond 44 → 45 (Creative lấy lại theo seed; chỉnh tay creative trong trình duyệt của 3 store sẽ bị thay).
+- Trang **TikTok Shop US** (`#/tiktok`, mục thứ 4 trên sidebar) theo format bảng theo dõi học viên của Huy Tim: timeline 8 bước ("Bạn ở đây", "xong 16/10", số bài tập), cột Tài liệu theo bước (bấm mở file trên Drive, chỉ dev), tab Quá trình / Bài giảng / Bài tập / Tài liệu.
+- Khung "KAN-86 đã làm đến đâu" (3 mục tiêu: xong / một phần / chờ) và "Gợi ý việc tiếp theo" gắn Amin / Claude / Huy.
+- Tab **Preview Shopify** trong chi tiết store (WhiskerWall, AquaNest, HeartBond; KAN-93/94/95): nhúng và mở trực tiếp **file HTML mockup** lưu trong Drive (`workspace/<store>/4-shopify/mockup/index.html`, ảnh tương đối trong `assets/`), kèm ai làm, số ảnh, mục có trong mockup / chưa có / còn placeholder, link thread và bản Muse cũ. Mockup theo style Noctanest (nền tối, nhấn hổ phách, nhiều ảnh ít chữ); HTML do Claude dựng, ảnh là khung AI demo và ảnh tạm, chưa có ảnh sản phẩm thật. Dữ liệu ở `src/data/shopifySeed.ts` (không dùng `seedRev`). Route dev `/mockup/<store>/` phục vụ file (chỉ đọc, chặn `../`).
+- Bảng điều khiển sync 2026-11-11 (`DASH_SEED_REV` 3): Done KAN-87, 89, 90, 91, 93, 94, 95, 96, GEN-1; giữ KAN-86 (In Progress), thêm KAN-97 (Idea).
+- Dữ liệu là bản chụp 2026-11-10 trong `src/data/tiktokSeed.ts`, không tự đồng bộ; chỗ chưa có ghi CHƯA NHẬN.
+
 ## [0.0.1] - 2026-11-10
 
 Bản đầu tiên: web quản lý store dropship theo một template chung. Vite + React 19 + TypeScript, dữ liệu lưu trong trình duyệt (localStorage), chưa có backend.

@@ -1,13 +1,24 @@
 export interface DashLink { label: string; url?: string; path?: string }
-export interface DashNotes { progress?: string; next?: string; blocker?: string; note?: string }
+export interface DashNotes {
+  objective?: string
+  progress?: string
+  done?: string
+  next?: string
+  blocker?: string
+  note?: string
+}
 export interface DashTask {
   key: string
   t: string
   status: string
+  /** Ngày trạng thái Jira được kiểm trực tiếp hoặc đối chiếu từ báo cáo Jira. */
+  statusVerifiedAt?: string
   project?: string
   jira?: { key: string; url: string }
   inputs?: DashLink[]
   outputs?: DashLink[]
+  /** File tiến độ chi tiết (xem trước khi bấm). */
+  progressFile?: DashLink
   notes?: DashNotes
   /** Hạn dạng YYYY-MM-DD. */
   due?: string
@@ -37,6 +48,6 @@ export interface DashboardData {
   tasks: DashTask[]
   todo: DashTask[]
   idea: DashTask[]
-  done: { key: string; t: string; status: string }[]
+  done: DashTask[]
   widgets: DashWidget[]
 }

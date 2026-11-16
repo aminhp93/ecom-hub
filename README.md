@@ -10,11 +10,12 @@ npm run build    # kiểm kiểu + build
 
 ## Cấu trúc
 - `src/pages/StoreList.tsx`: danh sách store, tạo / sửa / xóa / tìm kiếm.
-- `src/pages/StoreDetail.tsx`: chi tiết 3 tab (Product info, Creative, Social).
+- `src/pages/StoreDetail.tsx`: chi tiết store (Product info, Creative, Video flow, Social, Preview Shopify, Task & agent).
+- `src/components/VideoFlowTab.tsx` + `src/data/videoFlows.ts`: tab Video flow (KAN-102): router 3 flow, cổng A/C/B của creative, asset ledger (`assetLedger` trong seed).
 - `src/components/`: bảng Product info, Creative, kênh Social, form, modal.
 - `src/data/types.ts`: kiểu dữ liệu. `template.ts`: template store mới (20 dòng Product info, 4 kênh).
 - `src/data/repo.ts`: giao diện lưu trữ. `localRepo.ts`: bản đang dùng (localStorage). `index.ts`: nơi chọn repo.
-- `src/data/seed.ts`: dữ liệu thật của 3 store (nhập 2026-11-08 từ artifact + Excel; sau khi đổi seed, dùng nút "Đưa về dữ liệu mẫu ban đầu" để nạp lại).
+- Dữ liệu seed không nằm trong code: `0-dashboard/dashboard-data/dashboard.json` và `1-dropship/stores/<store>/store.json` (thứ tự `stores/_index.json`) trong thư mục Working (`WORKING_ROOT`), nạp qua module ảo `virtual:working-data` (xem `vite.config.ts`). Sau khi sửa JSON, tải lại trang; store có `seedRev` mới hơn bản đã lưu thì được nạp lại, hoặc dùng nút "Đưa về dữ liệu mẫu".
 
 ## Chuyển sang Supabase
 Viết `supabaseRepo.ts` cùng giao diện `StoreRepo` rồi đổi một dòng trong `src/data/index.ts`. UI không đổi.
