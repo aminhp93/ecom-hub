@@ -18,7 +18,7 @@ export function SocialChannels({ store, onChange }: Props) {
   const [email, setEmail] = useState(store.email)
   const [domain, setDomain] = useState(store.domain)
   const [adding, setAdding] = useState<ChannelKey | null>(null)
-  const [filter, setFilter] = useState<ChannelKey | 'all'>('all')
+  const [filter, setFilter] = useState<ChannelKey | 'all'>('FB')
   const [openId, setOpenId] = useState<string | null>(null)
   const [more, setMore] = useState<Record<string, boolean>>({})
 
@@ -100,21 +100,22 @@ export function SocialChannels({ store, onChange }: Props) {
       <div className="card">
         <h2>Tổng hợp bài ({shown.length}{filter !== 'all' ? `/${allPosts.length}` : ''})</h2>
         <div className="chips" role="group" aria-label="Lọc theo kênh">
-          <button className={'chip' + (filter === 'all' ? ' on' : '')} onClick={() => setFilter('all')}>Tất cả ({allPosts.length})</button>
           {(Object.keys(CHANNELS) as ChannelKey[]).map((k) => (
             <button key={k} className={'chip' + (filter === k ? ' on' : '')} onClick={() => setFilter(k)}>
               {CHANNELS[k]} ({store.social[k].posts.length})
             </button>
           ))}
+          <button className={'chip' + (filter === 'all' ? ' on' : '')} onClick={() => setFilter('all')}>Tất cả ({allPosts.length})</button>
         </div>
         {filter !== 'all' && channelCard(filter)}
         {shown.length === 0 ? <p className="note">Chưa có bài nào.</p> : (
           <div className="scroll">
+            <p className="sp-sum"><b>{shown.filter(([, p]) => p.status === 'Đã đăng').length}</b> / {shown.length} bài đã đăng</p>
             <table className="sp">
-              <thead><tr><th>Bài (ngày)</th><th>Kênh</th><th>Trạng thái</th><th>Creative</th><th>Thao tác</th></tr></thead>
+              <thead><tr><th>Bài (ngày)</th>{filter === 'all' && <th>Kênh</th>}<th>Trạng thái</th><th>Creative</th><th>Thao tác</th></tr></thead>
               <tbody>
                 {shown.map(([k, p]) => (
-                  <tr key={k + p.id}>
+                  <tr key={k + p.id} className={p.status === 'Đã đăng' ? 'posted' : ''}>
                     <td data-label="Bài">
                       <div className="sp-post">
                         <Thumb src={p.media} />
@@ -125,8 +126,8 @@ export function SocialChannels({ store, onChange }: Props) {
                         </div>
                       </div>
                     </td>
-                    <td data-label="Kênh">{CHANNELS[k]}</td>
-                    <td data-label="Trạng thái"><Pill tone={p.status === 'Đã đăng' ? 'ok' : p.status === 'Đã lên lịch' ? 'warn' : 'idle'}>{p.status}</Pill></td>
+                    {filter === 'all' && <td data-label="Kênh">{CHANNELS[k]}</td>}
+                    <td data-label="Trạng thái">{p.status === 'Đã đăng' ? <span className="sp-done">✓ Đã đăng</span> : <Pill tone={p.status === 'Đã lên lịch' ? 'warn' : 'idle'}>{p.status}</Pill>}</td>
                     <td className="note" data-label="Creative">{p.creative ?? ''}</td>
                     <td data-label="Thao tác">
                       <div className="sp-act">
@@ -148,6 +149,7 @@ export function SocialChannels({ store, onChange }: Props) {
       {opened && (() => {
         const [k, p] = opened
         const inp = postInput(store, p)
+        const posted = p.status === 'Đã đăng'
         const tone = p.status === 'Đã đăng' ? 'ok' : p.status === 'Đã lên lịch' ? 'warn' : 'idle'
         const edit = (f: 'title' | 'ytTitle' | 'caption' | 'hashtags' | 'note' | 'url' | 'date' | 'file', v: string) => {
           if (v.trim() !== ((p[f] as string | undefined) ?? '')) patchPost(k, p.id, { [f]: v.trim() })
@@ -157,9 +159,15 @@ export function SocialChannels({ store, onChange }: Props) {
           <Modal wide title={`${CHANNELS[k]} · ${p.title}`} onClose={() => setOpenId(null)}>
             <div className="pd-head">
               <span className="note">{CHANNELS[k]} · {p.format}</span>
-              <Pill tone={tone}>{p.status}</Pill>
+              {posted ? <span className="sp-done">✓ Đã đăng</span> : <Pill tone={tone}>{p.status}</Pill>}
               <button className="btn" onClick={() => setOpenId(null)}>Đóng</button>
             </div>
+            {posted && (
+              <div className="pd-posted" role="status">
+                <b>✓ Đã đăng{p.date ? ` ngày ${p.date.split('-').reverse().join('/')}` : ''}</b>
+                {p.url ? <a href={p.url} target="_blank" rel="noreferrer">Mở bài đã đăng ↗</a> : <span>Chưa có link bài, dán vào ô "Link bài đã đăng" bên dưới.</span>}
+              </div>
+            )}
             <div className="pd" key={k + p.id}>
               <section className="pd-col">
                 <h3>1 · Input <span className="note">đầu vào dùng để làm bài</span></h3>
@@ -180,7 +188,7 @@ export function SocialChannels({ store, onChange }: Props) {
                     onBlur={(e) => { const v = e.target.value.trim(); if (v !== [p.caption, p.hashtags].filter(Boolean).join('\n\n')) patchPost(k, p.id, { caption: v, hashtags: '' }) }} />
                 </Field>
               </section>
-              <section className="pd-col">
+              <section className={`pd-col${posted ? ' posted' : ''}`}>
                 <h3>3 · Action <span className="note">đăng và quản lý</span></h3>
                 <Field label="Trạng thái">
                   <select value={p.status} onChange={(e) => patchPost(k, p.id, { status: e.target.value as PostStatus })}>
@@ -190,7 +198,11 @@ export function SocialChannels({ store, onChange }: Props) {
                 <Field label="Ngày (đăng hoặc dự kiến)"><input type="date" defaultValue={p.date ?? ''} onBlur={(e) => edit('date', e.target.value)} /></Field>
                 <Field label="Link bài đã đăng"><input defaultValue={p.url} placeholder="https://" onBlur={(e) => edit('url', e.target.value)} /></Field>
                 <div className="pd-actions">
-                  <ZernioSend channel={k} post={p} onSent={(url) => patchPost(k, p.id, url ? { url, status: 'Đã lên lịch' } : { status: 'Đã lên lịch' })} />
+                  {(() => {
+                    const z = <ZernioSend channel={k} post={p} store={store} onSent={(url) => patchPost(k, p.id, url ? { url, status: 'Đã lên lịch' } : { status: 'Đã lên lịch' })} onPosted={(url) => patchPost(k, p.id, { url, status: 'Đã đăng', date: new Date().toISOString().slice(0, 10) })} />
+                    // Đã đăng: gập khu gửi Zernio lại để tránh bấm đăng lần hai
+                    return posted ? <details className="more"><summary>Đăng lại lên Zernio (bài đã đăng rồi)</summary>{z}</details> : z
+                  })()}
                   {p.url && <a className="btn" href={p.url} target="_blank" rel="noreferrer">Mở bài đã đăng</a>}
                   <button className="btn" onClick={() => copy([p.caption, p.hashtags].filter(Boolean).join('\n\n'))}>Sao chép caption + hashtag</button>
                   <button className="btn bad" onClick={() => { if (window.confirm(`Xóa bài "${p.title}"?`)) { setChannel(k, { posts: store.social[k].posts.filter((x) => x.id !== p.id) }); setOpenId(null) } }}>Xóa bài</button>
@@ -255,31 +267,39 @@ function PostForm({ channel, onSave, onClose }: { channel: ChannelKey; onSave: (
 const PLATFORM: Record<ChannelKey, string> = { FB: 'facebook', IG: 'instagram', TT: 'tiktok', YT: 'youtube' }
 interface ZAccount { _id: string; platform: string; username?: string; displayName?: string }
 
-function ZernioSend({ channel, post, onSent }: { channel: ChannelKey; post: Post; onSent: (url?: string) => void }) {
+const norm = (t?: string) => (t ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+// Tài khoản Zernio thuộc store này: tên/username chứa tên store hoặc handle của kênh (không fallback sang store khác)
+function belongsToStore(a: ZAccount, store: Store, channel: ChannelKey): boolean {
+  const names = [norm(store.name), norm(store.social[channel].handle?.replace(/^@/, '').split(/\s/)[0])].filter((x) => x.length >= 4)
+  const have = [norm(a.displayName), norm(a.username)]
+  return names.some((n) => have.some((h) => h && (h.includes(n) || n.includes(h))))
+}
+
+function ZernioSend({ channel, post, store, onSent, onPosted }: { channel: ChannelKey; post: Post; store: Store; onSent: (url?: string) => void; onPosted: (url: string) => void }) {
   const [accounts, setAccounts] = useState<ZAccount[] | null>(null)
   const [err, setErr] = useState('')
   const [accountId, setAccountId] = useState('')
-  const [mode, setMode] = useState<'draft' | 'schedule'>('draft')
+  const [mode, setMode] = useState<'draft' | 'schedule' | 'now'>('now')
   const [when, setWhen] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
     let live = true
-    fetch('/zernio/accounts').then((r) => r.json()).then((j) => {
+    fetch(`/zernio/accounts?store=${encodeURIComponent(store.id)}`).then((r) => r.json()).then((j) => {
       if (!live) return
       if (j.error) { setErr(typeof j.error === 'string' ? j.error : JSON.stringify(j.error)); return }
-      const list = ((j.accounts ?? []) as ZAccount[]).filter((a) => a.platform === PLATFORM[channel])
+      const list = ((j.accounts ?? []) as ZAccount[]).filter((a) => a.platform === PLATFORM[channel] && belongsToStore(a, store, channel))
       setAccounts(list)
       if (list[0]) setAccountId(list[0]._id)
     }).catch((e) => live && setErr(String(e)))
     return () => { live = false }
-  }, [channel])
+  }, [channel, store])
 
   const send = async () => {
     const acc = accounts?.find((a) => a._id === accountId)
     const text = [post.caption, post.hashtags].filter(Boolean).join('\n\n')
-    const label = mode === 'draft' ? 'lưu NHÁP (chưa đăng)' : `HẸN GIỜ ${when}`
+    const label = mode === 'draft' ? 'lưu NHÁP (chưa đăng)' : mode === 'now' ? 'ĐĂNG NGAY, CÔNG KHAI, không hoàn tác được từ đây' : `HẸN GIỜ ${when}`
     if (!text.trim() && !post.media) { setMsg('Bài chưa có caption hay video.'); return }
     if (mode === 'schedule' && !when) { setMsg('Chọn giờ hẹn.'); return }
     if (!window.confirm(`Gửi lên Zernio (${acc?.displayName ?? acc?.username ?? accountId}, ${CHANNELS[channel]}): ${label}\n\nVideo: ${post.media ?? 'không có'}\n\nCaption:\n${text}`)) return
@@ -287,10 +307,18 @@ function ZernioSend({ channel, post, onSent }: { channel: ChannelKey; post: Post
     try {
       const r = await fetch('/zernio/publish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mediaPath: post.media, caption: text, title: (channel === 'YT' && post.ytTitle ? post.ytTitle : post.title).slice(0, 100), platform: PLATFORM[channel], accountId, mode, scheduledFor: when || undefined, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+        body: JSON.stringify({ storeId: store.id, mediaPath: post.media, caption: text, title: (channel === 'YT' && post.ytTitle ? post.ytTitle : post.title).slice(0, 100), platform: PLATFORM[channel], accountId, mode, scheduledFor: when || undefined, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
       })
       const j = await r.json()
       if (!r.ok) { setMsg(`Lỗi ${r.status}: ${JSON.stringify(j).slice(0, 400)}`); return }
+      if (mode === 'now') {
+        const post = (j.post ?? {}) as { status?: string; platforms?: { platformPostUrl?: string; status?: string }[] }
+        const link = post.platforms?.find((x) => x.platformPostUrl)?.platformPostUrl ?? (j as { platformPostUrl?: string }).platformPostUrl
+        if (r.status === 207 || post.status === 'failed' || post.status === 'partial') { setMsg(`Zernio báo đăng chưa trọn vẹn (${r.status}): ${JSON.stringify(j).slice(0, 400)}`); return }
+        setMsg(link ? `Zernio báo đã đăng: ${link}. Hãy mở link kiểm lại.` : `Zernio nhận lệnh đăng (trạng thái ${post.status ?? '?'}), chưa có link. Kiểm trên Page rồi dán link vào ô bên trên.`)
+        if (post.status === 'published' && link) onPosted(link)
+        return
+      }
       setMsg(mode === 'draft' ? 'Đã lưu nháp trên Zernio. Vào dashboard Zernio để xem và đăng.' : 'Đã hẹn giờ trên Zernio.')
       if (mode === 'schedule') onSent()
     } catch (e) { setMsg(String(e)) } finally { setBusy(false) }
@@ -298,7 +326,7 @@ function ZernioSend({ channel, post, onSent }: { channel: ChannelKey; post: Post
 
   if (err) return <p className="note">Zernio chưa dùng được: {err}</p>
   if (!accounts) return <p className="note">Đang hỏi Zernio…</p>
-  if (accounts.length === 0) return <p className="note">Chưa nối kênh {CHANNELS[channel]} trên Zernio. <a href="https://zernio.com/dashboard/connections" target="_blank" rel="noreferrer">Nối kênh</a> rồi mở lại popup.</p>
+  if (accounts.length === 0) return <p className="note">Chưa có kênh {CHANNELS[channel]} của store {store.name} trên Zernio (tài khoản phải có tên khớp store). <a href="https://zernio.com/dashboard/connections" target="_blank" rel="noreferrer">Nối kênh</a> rồi mở lại popup.</p>
   return (
     <div className="zsend">
       <Field label="Tài khoản Zernio">
@@ -307,13 +335,14 @@ function ZernioSend({ channel, post, onSent }: { channel: ChannelKey; post: Post
         </select>
       </Field>
       <Field label="Cách gửi">
-        <select value={mode} onChange={(e) => setMode(e.target.value as 'draft' | 'schedule')}>
+        <select value={mode} onChange={(e) => setMode(e.target.value as 'draft' | 'schedule' | 'now')}>
           <option value="draft">Lưu nháp (an toàn, chưa đăng)</option>
           <option value="schedule">Hẹn giờ đăng</option>
+          <option value="now">Đăng ngay (công khai)</option>
         </select>
       </Field>
       {mode === 'schedule' && <Field label="Giờ đăng"><input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} /></Field>}
-      <button className="btn pri" disabled={busy} onClick={send}>{busy ? 'Đang gửi…' : 'Gửi lên Zernio'}</button>
+      <button className="btn pri" disabled={busy} onClick={send}>{busy ? 'Đang gửi…' : mode === 'now' ? 'Đăng ngay lên Zernio' : 'Gửi lên Zernio'}</button>
       {msg && <p className="note full">{msg}</p>}
     </div>
   )

@@ -18,6 +18,7 @@ function mergeKeepUserEdits(seed: Store, old: Store): Store {
         const sp = sc.posts.find((x) => x.id === op.id)
         if (!sp) { sc.posts.push(op); continue }
         if (op.status !== 'Chưa đăng' || op.url) { sp.status = op.status; sp.url = op.url; sp.date = op.date }
+        else if (op.status === 'Chưa đăng' && !sp.url) { sp.status = 'Chưa đăng'; sp.date = '' } // Amin hạ về Chưa đăng, seed không có link thì giữ
       }
     }
   } catch { /* nếu cấu trúc lạ thì dùng seed nguyên bản */ }

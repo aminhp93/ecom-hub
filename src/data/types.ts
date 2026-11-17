@@ -8,13 +8,14 @@ export type PostFormat = 'Video ngắn' | 'Video dài' | 'Ảnh' | 'Bài viết'
 export type Gate = 'A' | 'B' | 'C'
 export type VideoStatus = 'Chưa qua cổng' | 'Đã qua cổng'
 // KAN-102: cách tạo video (docs/3-creative/8-video-flows.md). 1 ảnh + prompt có biến; 2a rút cấu trúc ref bằng chữ rồi gen bằng Flow 1; 2b upload video ref (chỉ ref có quyền); 3 remix asset sạch quyền.
-export type VideoFlow = '1' | '2a' | '2b' | '3'
+// A/B = quy trình v2.0 (16/11/2026); 1/2a/2b/3 = nhãn cũ v1.0 của video đã làm, chỉ để hiển thị
+export type VideoFlow = 'A' | 'B' | '1' | '2a' | '2b' | '3'
 export type GateState = 'Đạt' | 'Không đạt' | 'Chưa review' | 'Không áp dụng'
 export type GateKey = 'A' | 'C' | 'B'
 export type RightsStatus = 'owned' | 'licensed' | 'permitted' | 'unknown' | 'not_permitted'
 export type LedgerStatus = 'approved' | 'pending' | 'blocked'
 
-// Một dòng asset ledger (theo 0-dashboard/task-hub/KAN-102/output/05b-ASSET-LEDGER-mau.csv)
+// Một dòng asset ledger (theo 0-dashboard/task-hub/archive/KAN-102/output/05b-ASSET-LEDGER-mau.csv)
 export interface AssetLedgerRow {
   asset_id: string
   type: string
@@ -60,6 +61,23 @@ export interface Video {
   gates?: Partial<Record<GateKey, GateState>>
   // Ghi chú về flow/quyền ref (vd ref chưa rõ quyền, đề xuất gỡ bài)
   flowNote?: string
+  // Bằng chứng đầu vào cho bảng "Mức sẵn sàng" (8 tiêu chí). Điểm do readiness.ts tính, không nhập tay.
+  readiness?: ReadinessInput
+}
+
+export interface ReadinessInput {
+  // Kết quả chạy validate-flow1.py (do Claude ghi sau khi chạy thật)
+  validator?: { result: 'READY' | 'INVALID' | 'BLOCKED'; at: string; note?: string }
+  // asset_id trong store.assetLedger mà video này dùng
+  ledgerIds?: string[]
+  // Trần credit Amin duyệt bằng con số
+  budget?: { cap: string; approved_at: string; note?: string }
+  // Tiêu chí "Không áp dụng": key = số tiêu chí (chỉ 5), value = lý do
+  na?: Record<string, string>
+  // Bản Final cụ thể Amin duyệt (đường dẫn trùng video.media)
+  final?: { file: string; approved_by: 'Amin'; at: string }
+  // Lý do/ghi chú cổng (vd cổng C không áp dụng)
+  gateNotes?: Partial<Record<GateKey, string>>
 }
 
 export interface GenKit {

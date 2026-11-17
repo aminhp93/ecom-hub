@@ -29,7 +29,7 @@ const M1 = `${T}03-Tai-lieu/01-mentor/buoc-1/tai-lieu/`
 const M2 = `${T}03-Tai-lieu/01-mentor/buoc-2/tai-lieu/`
 const K86 = '0-dashboard/task-hub/KAN-86/output/'
 const K86t = '0-dashboard/task-hub/KAN-86/'
-const K88 = '0-dashboard/task-hub/KAN-88/'
+const K88 = '0-dashboard/task-hub/archive/KAN-88/'
 
 export const TIKTOK = {
   snapshotAt: '2026-11-10',

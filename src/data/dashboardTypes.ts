@@ -7,7 +7,12 @@ export interface DashNotes {
   blocker?: string
   note?: string
 }
+export interface DashVerify { text: string; state: 'ok' | 'fail' | 'pending' }
 export interface DashTask {
+  /** Yêu cầu cần đạt (lấy từ mục Requirement trên Jira). */
+  requirements?: string[]
+  /** Kết quả kiểm từng yêu cầu (mục Verify trên Jira: dòng bắt đầu ✅ / ❌ / ⬜). */
+  verify?: DashVerify[]
   key: string
   t: string
   status: string

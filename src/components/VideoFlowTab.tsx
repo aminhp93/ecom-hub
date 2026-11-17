@@ -2,11 +2,11 @@ import type { Store, Video, VideoFlow } from '../data/types'
 import { DEFAULT_WORKFLOW, FALLBACK, FLOW_DOC, FLOW_DOC_VERSION, FLOW_LABEL, GATES, GATE_TONE, LEDGER_TONE, P0_EVIDENCE, RIGHTS_TONE, ROUTER } from '../data/videoFlows'
 import { Pill } from './ui'
 
-// Tab "Video flow" (KAN-102): router 3 flow, flow + cổng của từng creative, asset ledger của store.
+// Tab "Video flow" (KAN-102): router 2 flow (A/B), flow + cổng của từng creative, asset ledger của store.
 export function VideoFlowTab({ store }: { store: Store }) {
   const videos = store.creative.filter((v) => v.flow)
   const ledger = store.assetLedger ?? []
-  const flows: VideoFlow[] = ['1', '2a', '2b', '3']
+  const flows: VideoFlow[] = ['A', 'B', '1', '2a', '2b', '3']
   return (
     <>
       <div className="card">
@@ -77,7 +77,7 @@ export function VideoFlowTab({ store }: { store: Store }) {
           <Pill tone="warn">pending {ledger.filter((r) => r.status === 'pending').length}</Pill>
           <Pill tone="bad">blocked {ledger.filter((r) => r.status === 'blocked').length}</Pill>
         </div>
-        <p className="note">Bản mẫu từ <span className="mono">0-dashboard/task-hub/KAN-102/output/05b-ASSET-LEDGER-mau.csv</span>: người kiểm và ngày kiểm còn để "(mẫu)", chưa dòng nào approved. Asset chỉ được dùng khi quyền là owned/licensed/permitted và có bằng chứng; Amin xác nhận quyền.</p>
+        <p className="note">Bản mẫu từ <span className="mono">0-dashboard/task-hub/archive/KAN-102/output/05b-ASSET-LEDGER-mau.csv</span>: người kiểm và ngày kiểm còn để "(mẫu)", chưa dòng nào approved. Asset chỉ được dùng khi quyền là owned/licensed/permitted và có bằng chứng; Amin xác nhận quyền.</p>
         {ledger.length === 0 ? <p className="note">Store này chưa có dòng ledger.</p> : (
           <div className="scroll">
             <table className="rt">
@@ -104,7 +104,7 @@ export function VideoFlowTab({ store }: { store: Store }) {
 }
 
 export function FlowPill({ flow }: { flow: VideoFlow }) {
-  return <span title={FLOW_LABEL[flow]}><Pill tone={flow === '2b' ? 'bad' : flow === '3' ? 'ok' : 'idle'}>Flow {flow}</Pill></span>
+  return <span title={FLOW_LABEL[flow]}><Pill tone={flow === '2b' ? 'bad' : flow === 'A' || flow === 'B' ? 'ok' : 'idle'}>Flow {flow}</Pill></span>
 }
 
 export function GatePill({ v, k }: { v: Video; k: 'A' | 'C' | 'B' }) {

@@ -1,32 +1,32 @@
 import type { GateKey, GateState, LedgerStatus, RightsStatus, VideoFlow } from './types'
 
-// Tóm tắt từ 1-dropship/docs/3-creative/8-video-flows.md (v1.0, 13/11/2026, KAN-102). Sửa file doc thì cập nhật lại ở đây.
+// Tóm tắt từ 1-dropship/docs/3-creative/8-video-flows.md (v2.0, 16/11/2026, KAN-111). Sửa file doc thì cập nhật lại ở đây.
 export const FLOW_DOC = '1-dropship/docs/3-creative/8-video-flows.md'
-export const FLOW_DOC_VERSION = 'v1.0 · 13/11/2026'
+export const FLOW_DOC_VERSION = 'v2.0 · 16/11/2026'
 
 export const FLOW_LABEL: Record<VideoFlow, string> = {
-  '1': 'Flow 1 · ảnh + prompt có biến',
-  '2a': 'Flow 2a · rút cấu trúc ref bằng chữ',
-  '2b': 'Flow 2b · upload video ref có quyền',
-  '3': 'Flow 3 · remix asset sạch quyền',
+  A: 'Flow A · phân tích video đối thủ → đề xuất',
+  B: 'Flow B · tự prompt từ thông tin sản phẩm',
+  '1': '(cũ) Flow 1 · ảnh + prompt có biến',
+  '2a': '(cũ) Flow 2a · rút cấu trúc ref bằng chữ',
+  '2b': '(cũ) Flow 2b · upload video ref có quyền',
+  '3': '(cũ) Flow 3 · remix, đã bỏ 16/11/2026',
 }
 
 export const ROUTER: { have: string; want: string; flow: string; note: string }[] = [
-  { have: 'Ảnh sản phẩm (hoặc mô tả chữ) + angle', want: 'Video mới', flow: 'Flow 1', note: 'Config YAML, chạy validate-flow1.py → READY mới render prompt (cổng A), báo giá thật, Amin duyệt trần, ảnh neo (cổng C), clip (cổng B).' },
-  { have: 'Một video chạy tốt (ads đối thủ, video hook hay)', want: 'Bắt cấu trúc/hook đó cho sản phẩm mình', flow: 'Flow 2', note: 'Luôn làm 2a trước (structure_spec bằng chữ, 0 credit). 2b chỉ khi ref là owned/licensed/permitted và Amin duyệt riêng; ref đối thủ không bao giờ upload.' },
-  { have: 'Video/ảnh/nhạc sạch quyền của mình', want: 'Biến thể nhanh, 0 credit', flow: 'Flow 3', note: 'Ghi ledger trước khi dùng, edit plan, dựng bằng ffmpeg/HyperFrames, chữ PNG phủ, nhãn AI, cổng B + compliance.' },
+  { have: 'Video gốc của đối thủ (kho 3-creative/refs/doi-thu/)', want: 'Học hook/cấu trúc cho sản phẩm mình', flow: 'Flow A', note: 'Phân tích, chấm ≥ 8/12, viết structure_spec bằng chữ, đề xuất. Rights not_permitted: chỉ xem nội bộ, không upload vào Flow/Muse.' },
+  { have: 'Thông tin sản phẩm + ảnh sản phẩm thật', want: 'Video mới tự nghĩ', flow: 'Flow B', note: 'Config YAML, validate-flow1.py → READY, prompt-flow.md / prompt-muse.md, cổng A, Amin duyệt trần, gen trên Google Flow (minhpham.piscada@gmail.com) hoặc Muse, cổng C/B.' },
 ]
 
-export const DEFAULT_WORKFLOW = ['Flow 2a (cấu trúc bằng chữ, 0 credit)', 'Flow 1 (gen asset sạch, có trần credit)', 'Flow 3 (nhân biến thể từ video đã Đạt, 0 credit)']
+export const DEFAULT_WORKFLOW = ['Flow A (phân tích ad, 0 credit)', 'Flow B (config + prompt, có trần credit)', 'Gen trên Flow/Muse → cổng C/B → Amin duyệt']
 
 export const FALLBACK = [
-  'Flow 1 trên Google Flow (Veo/Omni; chấp nhận 8 s, kiểm watermark)',
-  'Muse khi Amin giao (đếm số lần gen)',
-  'Flow 3 thuần từ video đã duyệt',
-  'Flow 2b/Genjutsu (chỉ ref owned/licensed/permitted và Amin duyệt riêng)',
+  'Google Flow đăng nhập minhpham.piscada@gmail.com (kiểm watermark Veo)',
+  'Muse (tài khoản Amin; email khác: Trống)',
+  'Higgsfield tạm không dùng (hết credit), chỉ lấy cảm hứng từ prompt cũ',
 ]
 
-export const P0_EVIDENCE = 'Bằng chứng P0 (13/11/2026): Flow 3 chỉ chạy được ở store có asset sạch (WhiskerWall); AquaNest và HeartBond bị chặn vì asset hiện có chưa rõ quyền hoặc dính watermark. Vì vậy Flow 1 phải đi trước.'
+export const P0_EVIDENCE = 'Đã bỏ Flow 3 (remix/HyperFrames) ngày 16/11/2026 theo quyết định của Amin. Video làm trước đó vẫn giữ nhãn flow cũ (1/2a/2b/3).'
 
 export const GATES: [GateKey, string][] = [['A', 'Cổng A · prompt'], ['C', 'Cổng C · ảnh neo'], ['B', 'Cổng B · video']]
 

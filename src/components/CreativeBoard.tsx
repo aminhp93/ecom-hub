@@ -5,6 +5,7 @@ import { Modal } from './Modal'
 import { Field, Media, Pill, DriveLink } from './ui'
 import type { GenKit, GateState, VideoFlow } from '../data/types'
 import { FlowGates } from './VideoFlowTab'
+import { ReadinessBadge } from './ReadinessBadge'
 
 interface Props {
   store: Store
@@ -57,7 +58,7 @@ export function CreativeBoard({ store, onChange }: Props) {
                         const hasRef = slots.some(([, f]) => f?.length)
                         return (
                           <tr key={v.id}>
-                            <td className="vl-id"><div className="vl-scroll"><b>{v.id}</b>{!v.media && <div><Pill tone="warn">Draft</Pill></div>}<FlowGates v={v} /><div className="note">{v.title}</div></div></td>
+                            <td className="vl-id"><div className="vl-scroll"><b>{v.id}</b>{!v.media && <div><Pill tone="warn">Draft</Pill></div>}<FlowGates v={v} /><ReadinessBadge store={store} v={v} /><div className="note">{v.title}</div></div></td>
                             <td className="vl-media">{v.media ? <Media src={v.media} /> : <div className="thumb">Chưa có</div>}</td>
                             <td className="vl-src"><div className="vl-scroll">{items.length ? <ul>{items.map((t) => <li key={t}>{t}</li>)}</ul> : <span className="note">Trống</span>}{links.map((x) => <div key={x.label}><a href={x.text} target="_blank" rel="noreferrer">{x.label} ↗</a></div>)}</div></td>
                             <td className="vl-prompt">{k?.prompt && <CopyBtn text={k.prompt} label="Copy all prompt" />}<div className="vl-scroll">{k?.prompt ? <p className="note pre">{k.prompt}</p> : <span className="note">Không có</span>}</div></td>
@@ -92,6 +93,7 @@ export function CreativeBoard({ store, onChange }: Props) {
                           <Pill>Cổng {v.gate}</Pill>
                         </div>
                         <FlowGates v={v} />
+                        <ReadinessBadge store={store} v={v} />
                         {v.flowNote && <p className="note full"><b>Flow / quyền:</b> {v.flowNote}</p>}
                         <div>{v.title}</div>
                         {v.last_updated && <div className="note full"><b>last_updated:</b> {v.last_updated}</div>}
@@ -124,7 +126,7 @@ const TOOLS = ['Higgsfield Marketing Studio', 'Higgsfield Genjutsu', 'Muse (muse
 const MODES = ['', 'UGC Selfie Testimonial', 'Camera POV', 'Mess to Fresh', 'Unboxing', 'Khác']
 const HOOKS = ['', 'Spicy', 'Product Crash', 'Epic Fail', 'Không hook']
 const SETTINGS = ['', 'Bedroom', 'Nature', 'Roofing', 'Living room', 'Office', 'Khác']
-const FLOWS = ['', '1', '2a', '2b', '3']
+const FLOWS = ['', 'A', 'B', '1', '2a', '2b', '3']
 const GATE_STATES = ['Chưa review', 'Đạt', 'Không đạt', 'Không áp dụng']
 const lines = (t: string) => t.split('\n').map((x) => x.trim()).filter(Boolean)
 

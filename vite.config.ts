@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import react from '@vitejs/plugin-react'
@@ -10,9 +10,12 @@ function workingRoot(): string {
   return r
 }
 const KEY_FILE = path.join(os.homedir(), '.config', 'store-hub', '.env.local')
-function zernioKey(): string {
-  try { const m = fs.readFileSync(KEY_FILE, 'utf8').match(/^ZERNIO_API_KEY=(.*)$/m); if (m) return m[1].trim() } catch {}
-  return loadEnv('development', import.meta.dirname, '')['ZERNIO_API_KEY'] ?? ''
+// Mỗi store một key cố định: biến ZERNIO_API_KEY_<ID_STORE_VIẾT_HOA> (vd ZERNIO_API_KEY_AQUANEST, ZERNIO_API_KEY_HEARTBOND, ZERNIO_API_KEY_WHISKERWALL).
+// Không có key chung để dự phòng, tránh đăng nhầm sang store khác. Đọc từ KEY_FILE rồi tới .env.local của project, chỉ ở phía server.
+function zernioKey(storeId: string): string {
+  const name = 'ZERNIO_API_KEY_' + storeId.toUpperCase().replace(/[^A-Z0-9]/g, '_')
+  try { const m = fs.readFileSync(KEY_FILE, 'utf8').match(new RegExp('^' + name + '=(.*)$', 'm')); if (m) return m[1].trim() } catch {}
+  return loadEnv('development', import.meta.dirname, '')[name] ?? ''
 }
 
 // Dữ liệu seed nằm trong Drive (nguồn chính), không nằm trong code: module ảo 'virtual:working-data' đọc
@@ -166,18 +169,17 @@ print(json.dumps(out,ensure_ascii=False))`
 }
 
 // Dev/preview only: cầu nối tới Zernio (zernio.com/api/v1). Key đọc từ .env.local ở phía server, không đưa vào code trình duyệt.
-// GET /zernio/accounts: danh sách kênh đã nối. POST /zernio/publish: upload video lên Zernio rồi tạo bài nháp hoặc hẹn giờ (không đăng ngay).
+// GET /zernio/accounts: danh sách kênh đã nối. POST /zernio/publish: upload video lên Zernio rồi tạo bài nháp hoặc hẹn giờ (mode now = đăng ngay, chỉ khi người dùng bấm nút Đăng ngay).
 function zernioPlugin(): Plugin {
   const root = workingRoot()
   const API = 'https://zernio.com/api/v1'
-  const key = () => zernioKey()
   const json = (res: import('node:http').ServerResponse, code: number, body: unknown) => {
     res.statusCode = code
     res.setHeader('Content-Type', 'application/json')
     res.end(JSON.stringify(body))
   }
-  const call = async (p: string, init: RequestInit = {}) => {
-    const r = await fetch(API + p, { ...init, headers: { Authorization: `Bearer ${key()}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) } })
+  const call = async (key: string, p: string, init: RequestInit = {}) => {
+    const r = await fetch(API + p, { ...init, headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', ...(init.headers ?? {}) } })
     const text = await r.text()
     let data: unknown = text
     try { data = JSON.parse(text) } catch { /* giữ nguyên text */ }
@@ -191,15 +193,20 @@ function zernioPlugin(): Plugin {
   const handler = async (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void) => {
     const url = req.url?.split('?')[0]
     if (url !== '/zernio/accounts' && url !== '/zernio/publish') return next()
-    if (!key()) return json(res, 500, { error: 'Thiếu ZERNIO_API_KEY trong .env.local' })
     try {
+      const qs = new URLSearchParams(req.url?.split('?')[1] ?? '')
       if (url === '/zernio/accounts' && req.method === 'GET') {
-        const r = await call('/accounts')
+        const sid = qs.get('store') ?? ''
+        const k = sid ? zernioKey(sid) : ''
+        if (!k) return json(res, 500, { error: `Thiếu key Zernio của store "${sid}": đặt ZERNIO_API_KEY_${sid.toUpperCase().replace(/[^A-Z0-9]/g, '_')} trong .env.local` })
+        const r = await call(k, '/accounts')
         return json(res, r.status, r.data)
       }
       if (url === '/zernio/publish' && req.method === 'POST') {
-        const b = JSON.parse(await readBody(req)) as { mediaPath?: string; caption: string; platform: string; accountId: string; mode: 'draft' | 'schedule'; scheduledFor?: string; timezone?: string; title?: string }
-        if (!['draft', 'schedule'].includes(b.mode)) return json(res, 400, { error: 'mode phải là draft hoặc schedule' })
+        const b = JSON.parse(await readBody(req)) as { storeId?: string; mediaPath?: string; caption: string; platform: string; accountId: string; mode: 'draft' | 'schedule' | 'now'; scheduledFor?: string; timezone?: string; title?: string }
+        const k = b.storeId ? zernioKey(b.storeId) : ''
+        if (!k) return json(res, 500, { error: `Thiếu key Zernio của store "${b.storeId ?? ''}"` })
+        if (!['draft', 'schedule', 'now'].includes(b.mode)) return json(res, 400, { error: 'mode phải là draft, schedule hoặc now' })
         if (b.mode === 'schedule' && !b.scheduledFor) return json(res, 400, { error: 'Thiếu giờ hẹn' })
         let mediaItems: { type: string; url: string }[] | undefined
         if (b.mediaPath && !/^https?:/.test(b.mediaPath)) {
@@ -207,7 +214,7 @@ function zernioPlugin(): Plugin {
           const type = TYPES[path.extname(file).toLowerCase()]
           if (!file.startsWith(root + path.sep) || !type || !fs.existsSync(file)) return json(res, 404, { error: 'Không thấy file media' })
           const buf = fs.readFileSync(file)
-          const pre = await call('/media/presign', { method: 'POST', body: JSON.stringify({ filename: path.basename(file), contentType: type, size: buf.length }) })
+          const pre = await call(k, '/media/presign', { method: 'POST', body: JSON.stringify({ filename: path.basename(file), contentType: type, size: buf.length }) })
           const pd = pre.data as { uploadUrl?: string; publicUrl?: string }
           if (!pre.ok || !pd.uploadUrl || !pd.publicUrl) return json(res, pre.status || 502, { step: 'presign', detail: pre.data })
           const up = await fetch(pd.uploadUrl, { method: 'PUT', headers: { 'Content-Type': type }, body: buf })
@@ -221,9 +228,9 @@ function zernioPlugin(): Plugin {
           ...(b.title ? { title: b.title } : {}),
           ...(mediaItems ? { mediaItems } : {}),
           platforms: [{ platform: b.platform, accountId: b.accountId }],
-          ...(b.mode === 'schedule' ? { scheduledFor: b.scheduledFor, timezone: b.timezone ?? 'Asia/Ho_Chi_Minh' } : { isDraft: true }),
+          ...(b.mode === 'schedule' ? { scheduledFor: b.scheduledFor, timezone: b.timezone ?? 'Asia/Ho_Chi_Minh' } : b.mode === 'now' ? { publishNow: true } : { isDraft: true }),
         }
-        const r = await call('/posts', { method: 'POST', body: JSON.stringify(body), headers: { 'Idempotency-Key': crypto.randomUUID() } })
+        const r = await call(k, '/posts', { method: 'POST', body: JSON.stringify(body), headers: { 'Idempotency-Key': crypto.randomUUID() } })
         return json(res, r.status, r.data)
       }
       return json(res, 405, { error: 'method not allowed' })
@@ -238,7 +245,110 @@ function zernioPlugin(): Plugin {
   }
 }
 
+
+// Dev/preview only: cầu nối đọc trạng thái task từ Jira (REST API v3). Thông tin đăng nhập đọc từ .env.local ở phía server
+// (JIRA_SITE, JIRA_EMAIL, JIRA_API_TOKEN), không đưa vào trình duyệt. Chỉ đọc, không ghi lên Jira.
+
+// ADF (mô tả Jira) -> các mục theo tiêu đề: Input/Output là danh sách link, Progress/Next/Blocker/Mục tiêu là chữ.
+type Adf = { type?: string; text?: string; content?: Adf[]; marks?: { type: string; attrs?: { href?: string } }[]; attrs?: { url?: string; level?: number } }
+function adfLines(n: Adf, out: { text: string; links: { label: string; url: string }[]; head?: string }[]) {
+  const plain = (x: Adf): string => (x.text ?? '') + (x.content ?? []).map(plain).join('')
+  const links = (x: Adf, acc: { label: string; url: string }[]) => {
+    const href = x.marks?.find((m) => m.type === 'link')?.attrs?.href
+    if (href) acc.push({ label: x.text ?? href, url: href })
+    if (x.type === 'inlineCard' && x.attrs?.url) acc.push({ label: x.attrs.url, url: x.attrs.url })
+    ;(x.content ?? []).forEach((c) => links(c, acc))
+  }
+  for (const c of n.content ?? []) {
+    if (c.type === 'heading') out.push({ text: plain(c), links: [], head: plain(c) })
+    else if (c.type === 'bulletList' || c.type === 'orderedList') for (const li of c.content ?? []) { const l: { label: string; url: string }[] = []; links(li, l); out.push({ text: plain(li), links: l }) }
+    else { const l: { label: string; url: string }[] = []; links(c, l); out.push({ text: plain(c), links: l }) }
+  }
+}
+function jiraSections(desc: Adf | null | undefined) {
+  const lines: Parameters<typeof adfLines>[1] = []
+  if (desc) adfLines(desc, lines)
+  const key = (h: string) => ({ input: 'input', output: 'output', progress: 'progress', next: 'next', blocker: 'blocker', 'mục tiêu': 'objective', 'mục tiêu / mô tả': 'objective', requirement: 'requirement', requirements: 'requirement', 'yêu cầu': 'requirement', verify: 'verify', 'kiểm tra': 'verify', done: 'done', 'đã xong': 'done' } as Record<string, string>)[h.trim().toLowerCase()]
+  const sec: Record<string, { text: string[]; links: { label: string; url: string }[] }> = {}
+  let cur = ''
+  for (const l of lines) {
+    if (l.head !== undefined) { cur = key(l.head) ?? ''; if (cur) sec[cur] ??= { text: [], links: [] }; continue }
+    if (!cur) continue
+    if (l.text.trim()) sec[cur].text.push(l.text.trim())
+    sec[cur].links.push(...l.links)
+  }
+  return Object.keys(sec).length ? sec : null
+}
+function jiraPlugin(): Plugin {
+  const handler = async (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void) => {
+    if (req.url?.split('?')[0] !== '/jira/tasks') return next()
+    const send = (code: number, body: unknown) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)) }
+    const env = loadEnv('development', import.meta.dirname, '')
+    const site = (env['JIRA_SITE'] ?? '').replace(/^https?:\/\//, '').replace(/\/$/, '')
+    const email = env['JIRA_EMAIL'] ?? '', token = env['JIRA_API_TOKEN'] ?? ''
+    if (!site || !email || !token) return send(500, { error: 'Thiếu JIRA_SITE, JIRA_EMAIL hoặc JIRA_API_TOKEN trong .env.local' })
+    const auth = 'Basic ' + Buffer.from(`${email}:${token}`).toString('base64')
+    const jqls = ['project in (KAN, GA, GEN) AND statusCategory != Done ORDER BY key ASC', 'project in (KAN, GA, GEN) AND statusCategory = Done AND updated >= -14d ORDER BY key ASC']
+    try {
+      const issues: { key: string; t: string; status: string; sections?: ReturnType<typeof jiraSections> }[] = []
+      for (const jql of jqls) {
+        let pageToken = ''
+        for (let i = 0; i < 5; i++) {
+          const q = new URLSearchParams({ jql, fields: 'summary,status,description,comment', maxResults: '100' })
+          if (pageToken) q.set('nextPageToken', pageToken)
+          const r = await fetch(`https://${site}/rest/api/3/search/jql?${q}`, { headers: { Authorization: auth, Accept: 'application/json' } })
+          const j = (await r.json()) as { issues?: { key: string; fields: { summary: string; status: { name: string }; description?: Adf | null; comment?: { comments?: { body?: Adf }[] } } }[]; nextPageToken?: string; errorMessages?: string[] }
+          if (!r.ok) return send(r.status, { error: j.errorMessages?.join('; ') || `Jira trả ${r.status}` })
+          for (const it of j.issues ?? []) issues.push({ key: it.key, t: it.fields.summary, status: it.fields.status.name, sections: (it.fields.comment?.comments ?? []).slice().reverse().map((c) => jiraSections(c.body)).find(Boolean) ?? jiraSections(it.fields.description) })
+          if (!j.nextPageToken) break
+          pageToken = j.nextPageToken
+        }
+      }
+      send(200, { issues, fetchedAt: new Date().toISOString() })
+    } catch (e) { send(500, { error: String(e) }) }
+  }
+  return {
+    name: 'store-hub-jira',
+    configureServer(s) { s.middlewares.use(handler) },
+    configurePreviewServer(s) { s.middlewares.use(handler) },
+  }
+}
+
+
+// Dev/preview only: danh sách tài liệu trong 1-dropship/docs kèm link Drive (đọc item-id Drive của từng file), để trang Tài liệu hiển thị.
+function docsPlugin(): Plugin {
+  const root = workingRoot()
+  const base = path.join(root, '1-dropship', 'docs')
+  let cache: { at: number; body: string } | null = null
+  const driveId = (f: string): string => {
+    try { return execFileSync('xattr', ['-p', 'com.google.drivefs.item-id#S', f], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch { return '' }
+  }
+  const walk = (dir: string, depth: number): { path: string; name: string; dir: boolean; size: number; mtime: number; url: string }[] => {
+    const out: { path: string; name: string; dir: boolean; size: number; mtime: number; url: string }[] = []
+    for (const n of fs.readdirSync(dir).sort()) {
+      if (n.startsWith('.') || n.startsWith('~$')) continue
+      const f = path.join(dir, n), st = fs.statSync(f), id = driveId(f)
+      out.push({ path: path.relative(root, f), name: n, dir: st.isDirectory(), size: st.size, mtime: st.mtimeMs, url: id ? (st.isDirectory() ? 'https://drive.google.com/drive/folders/' : 'https://drive.google.com/file/d/') + id + (st.isDirectory() ? '' : '/view') : '' })
+      if (st.isDirectory() && depth < 3) out.push(...walk(f, depth + 1))
+    }
+    return out
+  }
+  const handler = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void) => {
+    if (req.url?.split('?')[0] !== '/docs/tree') return next()
+    res.setHeader('Content-Type', 'application/json')
+    try {
+      if (!cache || Date.now() - cache.at > 60000) cache = { at: Date.now(), body: JSON.stringify({ base: path.relative(root, base), items: walk(base, 1) }) }
+      res.end(cache.body)
+    } catch (e) { res.statusCode = 500; res.end(JSON.stringify({ error: String(e) })) }
+  }
+  return {
+    name: 'store-hub-docs',
+    configureServer(s) { s.middlewares.use(handler) },
+    configurePreviewServer(s) { s.middlewares.use(handler) },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), workingDataPlugin(), mediaPlugin(), zernioPlugin()],
+  plugins: [react(), workingDataPlugin(), mediaPlugin(), zernioPlugin(), jiraPlugin(), docsPlugin()],
 })
