@@ -4,10 +4,10 @@ import path from 'node:path'
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import os from 'node:os'
+// Không có Drive (vd build trên Vercel/CI): trả về '' để build vẫn qua, web chạy với dữ liệu rỗng. Dữ liệu thật chỉ có khi chạy local với WORKING_ROOT.
 function workingRoot(): string {
   const r = process.env.WORKING_ROOT || loadEnv('development', import.meta.dirname, '')['WORKING_ROOT']
-  if (!r || !fs.existsSync(r)) throw new Error('Đặt WORKING_ROOT (đường dẫn thư mục Working trên Drive) trong .env hoặc biến môi trường')
-  return r
+  return r && fs.existsSync(r) ? r : ''
 }
 const KEY_FILE = path.join(os.homedir(), '.config', 'store-hub', '.env.local')
 // Mỗi store một key cố định: biến ZERNIO_API_KEY_<ID_STORE_VIẾT_HOA> (vd ZERNIO_API_KEY_AQUANEST, ZERNIO_API_KEY_HEARTBOND, ZERNIO_API_KEY_WHISKERWALL).
@@ -28,6 +28,10 @@ function workingDataPlugin(): Plugin {
     load(id) {
       if (id !== '\0' + ID) return null
       const root = workingRoot()
+      if (!root) {
+        const empty = { snapshotAt: '', source: 'Chưa có dữ liệu (không tìm thấy WORKING_ROOT khi build)', focus: null, milestones: [], lastUpdate: { at: new Date().toISOString(), text: '' }, events: [], tasks: [], todo: [], idea: [], done: [], widgets: [] }
+        return `export const DASH_SEED_REV = 0\nexport const DASH_SEED = ${JSON.stringify(empty)}\nexport const SEED_STORES = []\n`
+      }
       const rd = (rel: string) => { const f = path.join(root, rel); this.addWatchFile(f); return JSON.parse(fs.readFileSync(f, 'utf8')) }
       const dash = rd('0-dashboard/dashboard-data/dashboard.json')
       const order: string[] = rd('1-dropship/stores/_index.json').order
@@ -45,6 +49,7 @@ const TYPES: Record<string, string> = {
 }
 function mediaPlugin(): Plugin {
   const root = workingRoot()
+  if (!root) return { name: 'store-hub-noop' }
   const handler = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void) => {
     if (req.url?.startsWith('/drive-id/')) {
       // Dev only: đọc ID file Google Drive (xattr của Drive for desktop) để dựng link mở trên Drive.
@@ -172,6 +177,7 @@ print(json.dumps(out,ensure_ascii=False))`
 // GET /zernio/accounts: danh sách kênh đã nối. POST /zernio/publish: upload video lên Zernio rồi tạo bài nháp hoặc hẹn giờ (mode now = đăng ngay, chỉ khi người dùng bấm nút Đăng ngay).
 function zernioPlugin(): Plugin {
   const root = workingRoot()
+  if (!root) return { name: 'store-hub-noop' }
   const API = 'https://zernio.com/api/v1'
   const json = (res: import('node:http').ServerResponse, code: number, body: unknown) => {
     res.statusCode = code
@@ -318,6 +324,7 @@ function jiraPlugin(): Plugin {
 // Dev/preview only: danh sách tài liệu trong 1-dropship/docs kèm link Drive (đọc item-id Drive của từng file), để trang Tài liệu hiển thị.
 function docsPlugin(): Plugin {
   const root = workingRoot()
+  if (!root) return { name: 'store-hub-noop' }
   const base = path.join(root, '1-dropship', 'docs')
   let cache: { at: number; body: string } | null = null
   const driveId = (f: string): string => {
