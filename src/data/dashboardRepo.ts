@@ -22,6 +22,12 @@ const PROJ: Record<string, string> = { KAN: 'Dropship', GA: 'AI', GEN: 'Cá nhâ
 const SITE = 'https://phamsworkspace-42448765.atlassian.net/browse/'
 
 /** Ghép trạng thái Jira (trực tiếp) vào dữ liệu: đổi nhóm/trạng thái theo Jira, giữ nguyên input/output/ghi chú đã có. */
+// Jira vẫn là nguồn chính; link chỉ có trong dashboard.json (chưa lên Jira) được giữ lại, không bị ghi đè.
+const withLocal = <T extends { label: string; url?: string; path?: string }>(jira: T[], local?: { label: string; url?: string; path?: string }[]): { label: string; url?: string; path?: string }[] => {
+  const seen = new Set(jira.map((l) => l.url ?? l.path))
+  return [...jira, ...(local ?? []).filter((l) => !seen.has(l.url ?? l.path))]
+}
+
 export function mergeJira(data: DashboardData, issues: JiraIssue[]): DashboardData {
   const d = structuredClone(data)
   const today = new Date().toISOString().slice(0, 10)
@@ -42,8 +48,8 @@ export function mergeJira(data: DashboardData, issues: JiraIssue[]): DashboardDa
     const sc = it.sections
     if (sc) {
       // Jira là nguồn chính: có mục nào thì thay đúng mục đó, link chuyển thành nút mở Drive/URL
-      if (sc.input?.links.length) t.inputs = sc.input.links.map((l) => ({ label: l.label, url: l.url }))
-      if (sc.output?.links.length) t.outputs = sc.output.links.map((l) => ({ label: l.label, url: l.url }))
+      if (sc.input?.links.length) t.inputs = withLocal(sc.input.links.map((l) => ({ label: l.label, url: l.url })), t.inputs)
+      if (sc.output?.links.length) t.outputs = withLocal(sc.output.links.map((l) => ({ label: l.label, url: l.url })), t.outputs)
       t.notes = { ...(t.notes ?? {}) }
       if (sc.objective) t.notes.objective = sc.objective.text.join('\n')
       if (sc.progress) t.notes.progress = sc.progress.text.join('\n')

@@ -4,6 +4,7 @@ import path from 'node:path'
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import os from 'node:os'
+import { createHash } from 'node:crypto'
 // Không có Drive (vd build trên Vercel/CI): trả về '' để build vẫn qua, web chạy với dữ liệu rỗng. Dữ liệu thật chỉ có khi chạy local với WORKING_ROOT.
 function workingRoot(): string {
   const r = process.env.WORKING_ROOT || loadEnv('development', import.meta.dirname, '')['WORKING_ROOT']
@@ -22,21 +23,31 @@ function zernioKey(storeId: string): string {
 // 0-dashboard/dashboard-data/dashboard.json và 1-dropship/stores/<id>/store.json (thứ tự: stores/_index.json). Sửa JSON rồi tải lại trang.
 function workingDataPlugin(): Plugin {
   const ID = 'virtual:working-data'
+  let isBuild = false
   return {
     name: 'working-data',
+    configResolved(c) { isBuild = c.command === 'build' },
     resolveId(id) { return id === ID ? '\0' + ID : null },
     load(id) {
       if (id !== '\0' + ID) return null
       const root = workingRoot()
       if (!root) {
         const empty = { snapshotAt: '', source: 'Chưa có dữ liệu (không tìm thấy WORKING_ROOT khi build)', focus: null, milestones: [], lastUpdate: { at: new Date().toISOString(), text: '' }, events: [], tasks: [], todo: [], idea: [], done: [], widgets: [] }
-        return `export const DASH_SEED_REV = 0\nexport const DASH_SEED = ${JSON.stringify(empty)}\nexport const SEED_STORES = []\n`
+        return `export const DASH_SEED_REV = 0\nexport const DASH_SEED = ${JSON.stringify(empty)}\nexport const SEED_STORES = []\nexport const TODAY_DAYS = []\n`
       }
       const rd = (rel: string) => { const f = path.join(root, rel); this.addWatchFile(f); return JSON.parse(fs.readFileSync(f, 'utf8')) }
       const dash = rd('0-dashboard/dashboard-data/dashboard.json')
       const order: string[] = rd('1-dropship/stores/_index.json').order
       const stores = order.map((sid) => rd(`1-dropship/stores/${sid}/store.json`))
-      return `export const DASH_SEED_REV = ${JSON.stringify(dash.rev)}\nexport const DASH_SEED = ${JSON.stringify(dash.data)}\nexport const SEED_STORES = ${JSON.stringify(stores)}\n`
+      // Tab "Hôm nay": mỗi ngày một file today/YYYY-MM-DD.json. Bản nháp (status khác "published") chỉ nạp khi chạy dev; build/publish bỏ hết.
+      const tdir = path.join(root, '0-dashboard/dashboard-data/today')
+      let days: unknown[] = []
+      try {
+        days = fs.readdirSync(tdir).filter((n) => /^\d{4}-\d{2}-\d{2}\.json$/.test(n)).sort().flatMap((n) => {
+          try { const f = path.join(tdir, n); this.addWatchFile(f); const j = JSON.parse(fs.readFileSync(f, 'utf8')); return isBuild && j.status !== 'published' ? [] : [j] } catch { return [] }
+        })
+      } catch { /* chưa có thư mục today/ thì rỗng */ }
+      return `export const DASH_SEED_REV = ${JSON.stringify(dash.rev)}\nexport const DASH_SEED = ${JSON.stringify(dash.data)}\nexport const SEED_STORES = ${JSON.stringify(stores)}\nexport const TODAY_DAYS = ${JSON.stringify(days)}\n`
     },
   }
 }
@@ -45,6 +56,7 @@ function workingDataPlugin(): Plugin {
 // Chỉ đọc, chỉ video/ảnh, chặn ../ để không lộ file khác. Bản deploy thật sẽ dùng storage (Supabase) thay thế.
 const TYPES: Record<string, string> = {
   '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.aac': 'audio/aac',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp',
 }
 function mediaPlugin(): Plugin {
@@ -139,6 +151,18 @@ print(json.dumps(out,ensure_ascii=False))`
       })
       return
     }
+    if (req.url?.startsWith('/ls/')) {
+      // Dev only (KAN-129/UI-CREATIVE): liệt kê file (đệ quy tối đa 2 cấp) trong một thư mục dưới Working. Chỉ đọc, chặn ../.
+      let r: string
+      try { r = decodeURIComponent(req.url.slice('/ls/'.length).split('?')[0]) } catch { res.statusCode = 400; return res.end() }
+      const d = path.resolve(root, r)
+      res.setHeader('Content-Type', 'application/json')
+      if (!d.startsWith(root + path.sep) || !fs.existsSync(d) || !fs.statSync(d).isDirectory()) { res.statusCode = 404; return res.end('[]') }
+      const out: { path: string; size: number }[] = []
+      const walk = (dir: string, depth: number) => { for (const n of fs.readdirSync(dir)) { if (n.startsWith('.')) continue; const f = path.join(dir, n); const st = fs.statSync(f); if (st.isDirectory()) { if (depth < 2) walk(f, depth + 1) } else out.push({ path: path.relative(root, f), size: st.size }) } }
+      walk(d, 1)
+      return res.end(JSON.stringify(out))
+    }
     if (!req.url?.startsWith('/media/')) return next()
     let rel: string
     try { rel = decodeURIComponent(req.url.slice('/media/'.length).split('?')[0]) } catch { res.statusCode = 400; return res.end() }
@@ -198,7 +222,7 @@ function zernioPlugin(): Plugin {
   })
   const handler = async (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void) => {
     const url = req.url?.split('?')[0]
-    if (url !== '/zernio/accounts' && url !== '/zernio/publish') return next()
+    if (url !== '/zernio/accounts' && url !== '/zernio/publish' && url !== '/zernio/posts') return next()
     try {
       const qs = new URLSearchParams(req.url?.split('?')[1] ?? '')
       if (url === '/zernio/accounts' && req.method === 'GET') {
@@ -206,6 +230,16 @@ function zernioPlugin(): Plugin {
         const k = sid ? zernioKey(sid) : ''
         if (!k) return json(res, 500, { error: `Thiếu key Zernio của store "${sid}": đặt ZERNIO_API_KEY_${sid.toUpperCase().replace(/[^A-Z0-9]/g, '_')} trong .env.local` })
         const r = await call(k, '/accounts')
+        return json(res, r.status, r.data)
+      }
+      // GET /zernio/posts?store=<id>&status=&limit=: chuyển nguyên danh sách bài của Zernio để web đồng bộ trạng thái (chỉ đọc).
+      if (url === '/zernio/posts' && req.method === 'GET') {
+        const sid = qs.get('store') ?? ''
+        const k = sid ? zernioKey(sid) : ''
+        if (!k) return json(res, 500, { error: `Thiếu key Zernio của store "${sid}"` })
+        qs.delete('store')
+        const q = qs.toString()
+        const r = await call(k, '/posts' + (q ? '?' + q : ''))
         return json(res, r.status, r.data)
       }
       if (url === '/zernio/publish' && req.method === 'POST') {
@@ -274,7 +308,7 @@ function adfLines(n: Adf, out: { text: string; links: { label: string; url: stri
 function jiraSections(desc: Adf | null | undefined) {
   const lines: Parameters<typeof adfLines>[1] = []
   if (desc) adfLines(desc, lines)
-  const key = (h: string) => ({ input: 'input', output: 'output', progress: 'progress', next: 'next', blocker: 'blocker', 'mục tiêu': 'objective', 'mục tiêu / mô tả': 'objective', requirement: 'requirement', requirements: 'requirement', 'yêu cầu': 'requirement', verify: 'verify', 'kiểm tra': 'verify', done: 'done', 'đã xong': 'done' } as Record<string, string>)[h.trim().toLowerCase()]
+  const key = (h: string) => ({ input: 'input', output: 'output', progress: 'progress', next: 'next', blocker: 'blocker', 'mục tiêu': 'objective', 'mục tiêu / mô tả': 'objective', requirement: 'requirement', requirements: 'requirement', 'yêu cầu': 'requirement', verify: 'verify', 'kiểm tra': 'verify', done: 'done', 'đã xong': 'done' } as Record<string, string>)[h.replace(/\s*[(（].*$/, '').trim().toLowerCase()]
   const sec: Record<string, { text: string[]; links: { label: string; url: string }[] }> = {}
   let cur = ''
   for (const l of lines) {
@@ -355,7 +389,327 @@ function docsPlugin(): Plugin {
   }
 }
 
+// Dev/preview only: hoạt động của một task cho popup Bắt đầu/Kết thúc phiên làm việc (đồng hồ tập trung):
+// comment Jira (log của các agent), file đã đổi trong task-hub/<KEY>/ (Drive) và đoạn cuối bàn giao.
+function activityPlugin(): Plugin {
+  const root = workingRoot()
+  if (!root) return { name: 'store-hub-activity-noop' }
+  const plainOf = (x: Adf): string => (x.text ?? '') + (x.content ?? []).map((c) => plainOf(c) + (c.type === 'paragraph' || c.type === 'heading' || c.type === 'listItem' ? '\n' : '')).join('')
+  const walk = (dir: string, base: string, depth: number, out: { path: string; mtime: number; size: number }[]) => {
+    let names: string[] = []
+    try { names = fs.readdirSync(dir) } catch { return }
+    for (const n of names) {
+      if (n.startsWith('.') || n.startsWith('~$') || n === 'archive' || n === 'node_modules') continue
+      const f = path.join(dir, n)
+      let st: fs.Stats
+      try { st = fs.statSync(f) } catch { continue }
+      if (st.isDirectory()) { if (depth < 5 && out.length < 400) walk(f, base, depth + 1, out) } else out.push({ path: path.relative(base, f), mtime: st.mtimeMs, size: st.size })
+    }
+  }
+  const handler = async (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void) => {
+    const u = new URL(req.url ?? '', 'http://x')
+    if (u.pathname !== '/task/activity') return next()
+    const send = (code: number, body: unknown) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)) }
+    const key = u.searchParams.get('key') ?? ''
+    if (!/^[A-Z]{2,5}-\d+$/.test(key)) return send(400, { error: 'key không hợp lệ' })
+    const hub = path.join(root, '0-dashboard', 'task-hub', key)
+    const files: { path: string; mtime: number; size: number }[] = []
+    walk(hub, hub, 0, files)
+    files.sort((a, b) => b.mtime - a.mtime)
+    let banGiao = ''
+    try { const t = fs.readFileSync(path.join(hub, 'progress', 'ban-giao.md'), 'utf8'); banGiao = t.slice(-1500) } catch { /* chưa có */ }
+    let jira: { status?: string; summary?: string; sections?: ReturnType<typeof jiraSections>; comments: { id: string; created: string; author: string; text: string }[]; error?: string } = { comments: [] }
+    const env = loadEnv('development', import.meta.dirname, '')
+    const site = (env['JIRA_SITE'] ?? '').replace(/^https?:\/\//, '').replace(/\/$/, '')
+    const email = env['JIRA_EMAIL'] ?? '', token = env['JIRA_API_TOKEN'] ?? ''
+    if (site && email && token) {
+      try {
+        const r = await fetch(`https://${site}/rest/api/3/issue/${key}?fields=summary,status,description,comment`, { headers: { Authorization: 'Basic ' + Buffer.from(`${email}:${token}`).toString('base64'), Accept: 'application/json' } })
+        const j = (await r.json()) as { fields?: { summary: string; status: { name: string }; description?: Adf | null; comment?: { comments?: { id: string; created: string; author?: { displayName?: string }; body?: Adf }[] } }; errorMessages?: string[] }
+        if (!r.ok || !j.fields) jira.error = j.errorMessages?.join('; ') || `Jira trả ${r.status}`
+        else {
+          const cs = j.fields.comment?.comments ?? []
+          jira = { status: j.fields.status.name, summary: j.fields.summary, sections: cs.slice().reverse().map((c) => jiraSections(c.body)).find(Boolean) ?? jiraSections(j.fields.description), comments: cs.slice(-15).map((c) => ({ id: c.id, created: c.created, author: c.author?.displayName ?? '', text: c.body ? plainOf(c.body).replace(/\n{2,}/g, '\n').trim().slice(0, 1200) : '' })) }
+        }
+      } catch (e) { jira.error = String(e) }
+    } else jira.error = 'Chưa cấu hình Jira cho web (đọc ở phía server)'
+    send(200, { key, files: files.slice(0, 200), banGiao, jira, fetchedAt: Date.now() })
+  }
+  return {
+    name: 'store-hub-activity',
+    configureServer(s) { s.middlewares.use(handler) },
+    configurePreviewServer(s) { s.middlewares.use(handler) },
+  }
+}
+
+// Dev/preview only: trang Market Research đọc thẳng nguồn trong Drive, không chép tay.
+//  - Chuẩn đã duyệt: 1-dropship/docs/1-market-research (Amin sở hữu).
+//  - Đề xuất KAN-118: 0-dashboard/task-hub/KAN-118/output (chờ Amin duyệt; cờ duyệt đọc từ dòng "Amin duyệt tiêu chí:" của input/TIEU-CHI.md).
+// /research/sources → JSON; /research/section?path=<tương đối từ working>&h=<tiêu đề> → Markdown của mục đó. Chỉ đọc, chỉ 2 thư mục trên.
+function researchPlugin(): Plugin {
+  const root = workingRoot()
+  if (!root) return { name: 'store-hub-research-noop' }
+  const STD = '1-dropship/docs/1-market-research'
+  const PROP = '0-dashboard/task-hub/KAN-118/output'
+  const CRIT = '0-dashboard/task-hub/KAN-118/input/TIEU-CHI.md'
+  const driveId = (f: string): string => {
+    try { return execFileSync('xattr', ['-p', 'com.google.drivefs.item-id#S', f], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch { return '' }
+  }
+  const allowed = (rel: string): string | null => {
+    const f = path.resolve(root, rel)
+    const ok = [STD, PROP].some((d) => f.startsWith(path.join(root, d) + path.sep)) && fs.existsSync(f) && fs.statSync(f).isFile()
+    return ok ? f : null
+  }
+  const info = (dir: string, exts: string[]) => {
+    const base = path.join(root, dir)
+    let names: string[] = []
+    try { names = fs.readdirSync(base).sort() } catch { return [] }
+    return names.filter((n) => exts.includes(path.extname(n).toLowerCase())).map((n) => {
+      const f = path.join(base, n), st = fs.statSync(f)
+      let title = n, version = ''
+      if (n.endsWith('.md')) {
+        const head = fs.readFileSync(f, 'utf8').slice(0, 3000)
+        title = head.match(/^#\s+(.+)$/m)?.[1].replace(/\\/g, '') ?? n
+        version = head.match(/\*\*Version:\*\*\s*([^\s·]+)/)?.[1] ?? ''
+      }
+      const id = driveId(f)
+      return { path: `${dir}/${n}`, name: n, title, version, mtime: st.mtimeMs, drive: id ? `https://drive.google.com/file/d/${id}/view` : '' }
+    })
+  }
+  const section = (text: string, h: string): string => {
+    const lines = text.replace(/\r/g, '').split('\n')
+    const norm = (s: string) => s.toLowerCase().replace(/[`*]/g, '').trim()
+    const i = lines.findIndex((l) => /^#{1,6}\s/.test(l) && norm(l.replace(/^#+\s*/, '')).startsWith(norm(h)))
+    if (i < 0) return ''
+    const lvl = lines[i].match(/^#+/)![0].length
+    let j = i + 1
+    while (j < lines.length && !(/^#{1,6}\s/.test(lines[j]) && lines[j].match(/^#+/)![0].length <= lvl)) j++
+    return lines.slice(i, j).join('\n').trim()
+  }
+  const handler = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void) => {
+    const u = new URL(req.url ?? '', 'http://x')
+    if (!['/research/sources', '/research/section', '/research/file', '/research/runs'].includes(u.pathname)) return next()
+    try {
+      if (u.pathname === '/research/file') {
+        const f = allowed(u.searchParams.get('path') ?? '')
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+        if (!f) { res.statusCode = 404; return res.end('not found') }
+        return res.end(fs.readFileSync(f, 'utf8'))
+      }
+      if (u.pathname === '/research/runs') {
+        // File run Excel của vòng lặp Market Research (chỉ tên + ngày; web chưa đọc nội dung từng run)
+        const dir = path.join(root, '1-dropship/research')
+        let names: string[] = []
+        try { names = fs.readdirSync(dir).filter((n) => /^MR-\d{8}-R\d+.*\.xlsx$/.test(n)).sort() } catch { /* chưa có thư mục */ }
+        res.setHeader('Content-Type', 'application/json')
+        return res.end(JSON.stringify({ dir: '1-dropship/research', runs: names.map((n) => ({ name: n, mtime: fs.statSync(path.join(dir, n)).mtimeMs })) }))
+      }
+      if (u.pathname === '/research/section') {
+        const f = allowed(u.searchParams.get('path') ?? '')
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+        if (!f) { res.statusCode = 404; return res.end('not found') }
+        return res.end(section(fs.readFileSync(f, 'utf8'), u.searchParams.get('h') ?? ''))
+      }
+      let approved = false, approvalLine = 'Không đọc được input/TIEU-CHI.md'
+      try {
+        const t = fs.readFileSync(path.join(root, CRIT), 'utf8')
+        const m = t.match(/Amin duyệt tiêu chí:\s*([^)\n]+)/)
+        approvalLine = (t.split('\n')[0] ?? '').replace(/^#\s*/, '')
+        approved = !!m && !/^\s*(CHƯA|chưa)/.test(m[1])
+      } catch { /* giữ mặc định: chưa duyệt */ }
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({
+        standard: { dir: STD, files: info(STD, ['.md']) },
+        proposal: { dir: PROP, approved, approvalLine, criteria: CRIT, files: info(PROP, ['.md', '.csv']) },
+      }))
+    } catch (e) { res.statusCode = 500; res.end(JSON.stringify({ error: String(e) })) }
+  }
+  return {
+    name: 'store-hub-research',
+    configureServer(s) { s.middlewares.use(handler) },
+    configurePreviewServer(s) { s.middlewares.use(handler) },
+  }
+}
+
+// Dev/preview only: cầu nối CHỈ ĐỌC tới worklog chuẩn (worklog/1, KAN-97). Gọi đúng parser chuẩn `quy-trinh/worklog.py` (validate + query --current-session),
+// trả nguyên đầu ra worklog-query/1. Không ghi file, không tự lọc/suy thêm. GET /worklog/query?task=KAN-118[&section=A], GET /worklog/active.
+function worklogPlugin(): Plugin {
+  const root = workingRoot()
+  if (!root) return { name: 'store-hub-noop' }
+  const script = path.join(root, '0-dashboard', 'quy-trinh', 'worklog.py')
+  const hub = path.join(root, '0-dashboard', 'task-hub')
+  const run = (args: string[]) => new Promise<{ code: number; out: string }>((resolve) => {
+    execFile('python3', [script, ...args], { maxBuffer: 20 * 1024 * 1024, timeout: 15000 }, (err, stdout, stderr) => {
+      const code = err ? (typeof (err as { code?: unknown }).code === 'number' ? (err as unknown as { code: number }).code : 1) : 0
+      resolve({ code, out: code === 0 ? stdout : stdout + stderr })
+    })
+  })
+  const send = (res: import('node:http').ServerResponse, code: number, body: unknown) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)) }
+  const one = async (key: string, section?: string) => {
+    const v = await run(['validate', key])
+    if (v.code !== 0) return { ok: false as const, error: `worklog ${key} không hợp lệ`, details: v.out.split('\n').slice(0, 6).join('\n') }
+    const q = await run(['query', key, '--current-session', ...(section ? ['--section', section] : [])])
+    if (q.code !== 0) return { ok: false as const, error: 'worklog.py query lỗi', details: q.out.slice(0, 400) }
+    try { return { ok: true as const, data: JSON.parse(q.out) } } catch { return { ok: false as const, error: 'đầu ra worklog.py không phải JSON', details: '' } }
+  }
+  // Tổng kết phiên (worklog-summary/1): dựng CHỈ từ worklog chuẩn (query --current-session, hôm nay, đúng một phiên), tách theo section, mỗi section chia Đã xong / Đang dở (Còn lại, Đang làm, Chờ).
+  // Bản lưu là ảnh chụp để xem lại, nằm riêng ở 0-dashboard/dashboard-data/tong-ket/<KEY>/ (không đụng thư mục task, không phải nguồn trạng thái).
+  const sumDir = (key: string) => path.join(root, '0-dashboard', 'dashboard-data', 'tong-ket', key)
+  type WItem = { item_id: string; actor: string; action: string; status: string; evidence: string[]; verify: string | null; next_or_blocker: string | null; span: unknown; section_id: string; section_name: string }
+  const buildSummary = async (key: string) => {
+    const r = await one(key)
+    if (!r.ok) return r
+    const q = r.data as { date: string; tz: string; session: Record<string, unknown> | null; items: WItem[]; sections: { id: string; name: string }[] }
+    if (!q.session) return { ok: false as const, error: `Chưa có việc hôm nay (${q.date}) của ${key} trong worklog; không có gì để tổng kết`, details: '', empty: true }
+    const lite = (i: WItem) => ({ item_id: i.item_id, actor: i.actor, action: i.action, status: i.status, evidence: i.evidence, verify: i.verify, next_or_blocker: i.next_or_blocker, span: i.span })
+    const sections = q.sections.map((sec) => {
+      const its = q.items.filter((i) => i.section_id === sec.id)
+      return { id: sec.id, name: sec.name, done: its.filter((i) => i.status === 'Đã xong').map(lite), open: its.filter((i) => i.status !== 'Đã xong').map(lite) }
+    })
+    const sha = createHash('sha256').update(fs.readFileSync(path.join(hub, key, 'progress', 'worklog.jsonl'))).digest('hex').slice(0, 16)
+    return { ok: true as const, data: { schema: 'worklog-summary/1', task_key: key, date: q.date, tz: q.tz, generated_at: new Date().toISOString(), session: q.session, sections,
+      totals: { done: sections.reduce((n, x) => n + x.done.length, 0), open: sections.reduce((n, x) => n + x.open.length, 0) },
+      source: { file: `task-hub/${key}/progress/worklog.jsonl`, sha256_16: sha, query: 'worklog.py query --current-session (worklog-query/1)' } } }
+  }
+  const readBody = (req: import('node:http').IncomingMessage) => new Promise<string>((resolve) => { let b = ''; req.on('data', (c) => { b += c }); req.on('end', () => resolve(b)) })
+  const handler = async (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void) => {
+    const [url, qs] = (req.url ?? '').split('?')
+    if (!['/worklog/query', '/worklog/active', '/worklog/task', '/worklog/summary', '/worklog/summaries', '/worklog/session', '/worklog/criteria', '/worklog/all'].includes(url)) return next()
+    if (!fs.existsSync(script)) return send(res, 500, { error: 'Không thấy quy-trinh/worklog.py' })
+    try {
+      if (url === '/worklog/session') {
+        // Nút Bắt đầu / Kết thúc của ô phiên (Amin yêu cầu 20/11): GHI THÊM dòng vào worklog bằng worklog.py (append-only, không sửa/xóa).
+        // Chỉ một phiên "Đang làm" cùng lúc: bắt đầu một task thì mọi phiên đang chạy khác bị tạm dừng (Chờ). Kết thúc = pause → Chờ (không đánh dấu Đã xong).
+        if (req.method !== 'POST') return send(res, 405, { error: 'chỉ POST' })
+        let b: { task?: string; action?: string; plan_min?: number } = {}
+        try { b = JSON.parse(await readBody(req) || '{}') } catch { return send(res, 400, { error: 'JSON hỏng' }) }
+        const k = b.task ?? ''
+        if (!/^(KAN|GA|GEN)-\d+$/.test(k) || !['start', 'end'].includes(b.action ?? '')) return send(res, 400, { error: 'task/action không hợp lệ' })
+        const latest = (key: string) => {
+          const f = path.join(hub, key, 'progress', 'worklog.jsonl'); const m = new Map<string, Record<string, unknown>>()
+          if (!fs.existsSync(f)) return [] as Record<string, unknown>[]
+          for (const line of fs.readFileSync(f, 'utf8').split('\n')) { if (!line.trim()) continue; try { const r = JSON.parse(line) as Record<string, unknown>; const id = String(r.item_id); const o = m.get(id); if (!o || Number(r.rev) >= Number(o.rev)) m.set(id, r) } catch { /* bỏ */ } }
+          return [...m.values()]
+        }
+        // Phần quá giờ so với thời lượng đã chọn (mặc định 60 phút), ghi vào action của dòng pause để đánh giá sau. Chưa trừ lúc tạm dừng.
+        const overAction = (r: Record<string, unknown>, plan: number) => {
+          const st = typeof r.started_at === 'string' ? new Date(r.started_at).getTime() : NaN
+          const el = Number.isFinite(st) ? Math.round((Date.now() - st) / 60000) : NaN
+          if (!Number.isFinite(el)) return 'Kết thúc phiên từ nút trên web'
+          return el > plan ? `Kết thúc phiên từ nút trên web (QUÁ GIỜ ${el - plan} phút: ${el}/${plan} phút, chưa trừ lúc tạm dừng)` : `Kết thúc phiên từ nút trên web (${el}/${plan} phút)`
+        }
+        const today = new Date().toISOString().slice(0, 10)
+        const planMin = Number.isFinite(b.plan_min) && Number(b.plan_min) > 0 ? Number(b.plan_min) : 60
+        const stop = async (key: string) => {
+          const n: string[] = []
+          for (const r of latest(key).filter((x) => x.status === 'Đang làm')) {
+            const o = await run(['add', key, '--event', 'pause', '--item', String(r.item_id), '--status', 'Chờ', '--actor', 'Amin', '--action', overAction(r, planMin), '--next', 'Bấm Bắt đầu để tiếp tục'])
+            if (o.code !== 0) throw new Error(o.out.slice(0, 300)); n.push(String(r.item_id))
+          }
+          return n
+        }
+        const stopped: string[] = []
+        if (b.action === 'end') { stopped.push(...await stop(k)); return send(res, 200, { ok: true, stopped }) }
+        // start: dừng mọi phiên đang chạy ở task khác (và task này), rồi tiếp tục item mới nhất đang Chờ/Còn lại
+        const keys = fs.readdirSync(hub).filter((x) => /^(KAN|GA|GEN)-\d+$/.test(x) && fs.existsSync(path.join(hub, x, 'progress', 'worklog.jsonl')))
+        const cand = latest(k).filter((x) => x.status === 'Chờ' || x.status === 'Còn lại').sort((a, c) => String(c.updated_at ?? c.date).localeCompare(String(a.updated_at ?? a.date)))[0]
+        const running = latest(k).find((x) => x.status === 'Đang làm')
+        if (!cand && !running) return send(res, 409, { error: `Không có việc nào để bắt đầu ở ${k} (worklog hôm nay ${today})` })
+        for (const x of keys) if (x !== k) stopped.push(...await stop(x))
+        if (cand && !running) {
+          const o = await run(['add', k, '--event', 'resume', '--item', String(cand.item_id), '--status', 'Đang làm', '--actor', 'Amin', '--action', 'Bắt đầu phiên từ nút trên web'])
+          if (o.code !== 0) return send(res, 422, { error: o.out.slice(0, 300) })
+        }
+        return send(res, 200, { ok: true, stopped, started: String((cand ?? running)!.item_id) })
+      }
+      if (url === '/worklog/summary' || url === '/worklog/summaries') {
+        const k = new URLSearchParams(qs ?? '').get('task') ?? ''
+        if (!/^(KAN|GA|GEN)-\d+$/.test(k)) return send(res, 400, { error: 'task không hợp lệ' })
+        if (url === '/worklog/summaries') {
+          const d = sumDir(k)
+          const list = fs.existsSync(d) ? fs.readdirSync(d).filter((n) => n.endsWith('.json')).sort().reverse().flatMap((n) => { try { return [JSON.parse(fs.readFileSync(path.join(d, n), 'utf8'))] } catch { return [] } }) : []
+          return send(res, 200, { summaries: list })
+        }
+        if (!fs.existsSync(path.join(hub, k, 'progress', 'worklog.jsonl'))) return send(res, 404, { error: `Task ${k} chưa có progress/worklog.jsonl` })
+        const b = await buildSummary(k)
+        if (req.method === 'GET') return b.ok ? send(res, 200, b.data) : send(res, 'empty' in b ? 404 : 422, { error: b.error, details: b.details })
+        if (req.method === 'POST') {
+          if (!b.ok) return send(res, 'empty' in b ? 404 : 422, { error: b.error, details: b.details })
+          let note = ''
+          try { note = String((JSON.parse(await readBody(req)) as { note?: unknown }).note ?? '').slice(0, 2000) } catch { /* không có ghi chú */ }
+          const now = new Date(Date.now() + 7 * 3600000).toISOString()
+          const saved = { ...b.data, saved_at: now.slice(0, 19) + '+07:00', note: note.trim() || null }
+          const sid = String((saved.session as { id: string }).id).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60)
+          const file = `${saved.date}-${sid}-${now.slice(11, 19).replace(/:/g, '')}.json`
+          fs.mkdirSync(sumDir(k), { recursive: true })
+          fs.writeFileSync(path.join(sumDir(k), file), JSON.stringify({ ...saved, file: `dashboard-data/tong-ket/${k}/${file}` }, null, 1) + '\n', { flag: 'wx' })
+          return send(res, 200, { ...saved, file: `dashboard-data/tong-ket/${k}/${file}` })
+        }
+        return send(res, 405, { error: 'method not allowed' })
+      }
+      if (url === '/worklog/criteria') {
+        // Yêu cầu/tiêu chí của task (chỉ đọc input/TIEU-CHI.md: các dòng "- C<n>: ..."). Không chấm, không suy diễn.
+        const k = new URLSearchParams(qs ?? '').get('task') ?? ''
+        if (!/^(KAN|GA|GEN)-\d+$/.test(k)) return send(res, 400, { error: 'task không hợp lệ' })
+        const f = path.join(hub, k, 'input', 'TIEU-CHI.md')
+        if (!fs.existsSync(f)) return send(res, 200, { task_key: k, file: null, draft: false, criteria: [] })
+        const txt = fs.readFileSync(f, 'utf8')
+        const criteria = txt.split('\n').flatMap((l) => { const m = l.match(/^\s*[-*]\s*(C\d+)\s*:\s*(.+)$/); return m ? [{ id: m[1], text: m[2].trim() }] : [] })
+        return send(res, 200, { task_key: k, file: `task-hub/${k}/input/TIEU-CHI.md`, draft: /NHÁP/i.test(txt.split('\n')[0] ?? ''), criteria })
+      }
+      if (url === '/worklog/task') {
+        // Toàn bộ worklog của một task (mọi ngày, mọi phiên): chỉ đọc progress/worklog.jsonl, lấy bản mới nhất (rev cao nhất) của từng item. Không ghi, không suy thêm.
+        const k = new URLSearchParams(qs ?? '').get('task') ?? ''
+        if (!/^(KAN|GA|GEN)-\d+$/.test(k)) return send(res, 400, { error: 'task không hợp lệ' })
+        const f = path.join(hub, k, 'progress', 'worklog.jsonl')
+        if (!fs.existsSync(f)) return send(res, 200, { task_key: k, items: [] })
+        const last = new Map<string, Record<string, unknown>>()
+        for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
+          if (!line.trim()) continue
+          try { const r = JSON.parse(line) as Record<string, unknown>; const id = String(r.item_id); const old = last.get(id); if (!old || Number(r.rev) >= Number(old.rev)) last.set(id, r) } catch { /* bỏ dòng hỏng */ }
+        }
+        const items = [...last.values()].map((r) => ({ item_id: r.item_id, rev: r.rev, date: r.date, session_name: r.session_name, section_id: r.section_id, section_name: r.section_name, actor: r.actor, action: r.action, status: r.status, started_at: r.started_at ?? null, updated_at: r.updated_at ?? null, evidence: r.evidence ?? [], verify: r.verify ?? null, next_or_blocker: r.next_or_blocker ?? null }))
+          .sort((a, b) => String(b.started_at ?? b.date).localeCompare(String(a.started_at ?? a.date)))
+        return send(res, 200, { task_key: k, items })
+      }
+      if (url === '/worklog/all') {
+        // Mọi worklog của mọi task (bản mới nhất mỗi item) + cờ có summary/notebook trong progress/runs/<item_id>. Chỉ đọc.
+        const keys = fs.readdirSync(hub).filter((k) => /^(KAN|GA|GEN)-\d+$/.test(k) && fs.existsSync(path.join(hub, k, 'progress', 'worklog.jsonl'))).sort()
+        const rows: Record<string, unknown>[] = []
+        for (const k of keys) {
+          const last = new Map<string, Record<string, unknown>>()
+          for (const line of fs.readFileSync(path.join(hub, k, 'progress', 'worklog.jsonl'), 'utf8').split('\n')) {
+            if (!line.trim()) continue
+            try { const r = JSON.parse(line) as Record<string, unknown>; const id = String(r.item_id); const old = last.get(id); if (!old || Number(r.rev) >= Number(old.rev)) last.set(id, r) } catch { /* bỏ dòng hỏng */ }
+          }
+          for (const r of last.values()) {
+            const rd = path.join(hub, k, 'progress', 'runs', String(r.item_id))
+            rows.push({ key: k, item_id: r.item_id, date: r.date, section_id: r.section_id, section_name: r.section_name, actor: r.actor, action: r.action, status: r.status, started_at: r.started_at ?? null, evidence: r.evidence ?? [], next_or_blocker: r.next_or_blocker ?? null, has_summary: fs.existsSync(path.join(rd, 'summary.md')), has_notebook: fs.existsSync(path.join(rd, 'notebook.md')) })
+          }
+        }
+        return send(res, 200, { count: rows.length, items: rows })
+      }
+      if (url === '/worklog/active') {
+        const keys = fs.readdirSync(hub).filter((k) => /^(KAN|GA|GEN)-\d+$/.test(k) && fs.existsSync(path.join(hub, k, 'progress', 'worklog.jsonl'))).sort()
+        const items = await Promise.all(keys.map(async (k) => ({ key: k, r: await one(k) })))
+        return send(res, 200, { tasks: items.map((x) => x.r.ok ? (x.r.data.session ? { key: x.key, ok: true, query: x.r.data } : null) : { key: x.key, ok: false, error: x.r.error }).filter(Boolean) })
+      }
+      const p = new URLSearchParams(qs ?? '')
+      const key = p.get('task') ?? '', section = p.get('section') ?? ''
+      if (!/^(KAN|GA|GEN)-\d+$/.test(key) || (section && !/^[A-Za-z0-9_-]{1,24}$/.test(section))) return send(res, 400, { error: 'task hoặc section không hợp lệ' })
+      if (!fs.existsSync(path.join(hub, key, 'progress', 'worklog.jsonl'))) return send(res, 404, { error: `Task ${key} chưa có progress/worklog.jsonl` })
+      const r = await one(key, section || undefined)
+      return r.ok ? send(res, 200, r.data) : send(res, 422, { error: r.error, details: r.details })
+    } catch (e) { send(res, 500, { error: String(e) }) }
+  }
+  return {
+    name: 'store-hub-worklog',
+    configureServer(s) { s.middlewares.use(handler) },
+    configurePreviewServer(s) { s.middlewares.use(handler) },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), workingDataPlugin(), mediaPlugin(), zernioPlugin(), jiraPlugin(), docsPlugin()],
+  plugins: [react(), workingDataPlugin(), mediaPlugin(), zernioPlugin(), jiraPlugin(), docsPlugin(), activityPlugin(), researchPlugin(), worklogPlugin()],
 })

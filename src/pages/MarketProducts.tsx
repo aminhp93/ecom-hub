@@ -18,10 +18,11 @@ const Link = ({ href }: { href: string }) =>
     ? <span className="lnk">{label(href)} <a href={href} target="_blank" rel="noreferrer" title={`Mở ${href}`} aria-label="Mở link">↗</a></span>
     : <span className="note">Trống</span>
 
-function Thumb({ src, alt }: { src: string; alt: string }) {
+function Thumb({ src, alt, lg }: { src: string; alt: string; lg?: boolean }) {
   const [bad, setBad] = useState(false)
-  if (!src || bad) return <span className="mthumb miss">{src ? 'Ảnh lỗi' : 'Trống'}</span>
-  return <img className="mthumb" src={/^https?:/.test(src) ? src : `${import.meta.env.BASE_URL}${src}`} referrerPolicy="no-referrer" alt={alt} loading="lazy" onError={() => setBad(true)} />
+  const c = lg ? 'mthumb lg' : 'mthumb'
+  if (!src || bad) return <span className={`${c} miss`}>{src ? 'Ảnh lỗi' : 'Chưa có ảnh'}</span>
+  return <img className={c} src={/^https?:/.test(src) ? src : `${import.meta.env.BASE_URL}${src}`} referrerPolicy="no-referrer" alt={alt} loading="lazy" onError={() => setBad(true)} />
 }
 
 const Text = ({ text }: { text: string }) =>
@@ -90,7 +91,7 @@ function EditForm({ item, onSave, onClose }: { item: MarketProduct; onSave: (p: 
   )
 }
 
-export function MarketProducts() {
+export function MarketProducts({ title = 'Danh sách sản phẩm' }: { title?: string }) {
   const [items, setItems] = useState<MarketProduct[] | null>(null)
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<MarketProduct | null>(null)
@@ -120,7 +121,7 @@ export function MarketProducts() {
   return (
     <>
       <div className="bar">
-        <h1>Sản phẩm Market Research</h1>
+        <h3>{title}</h3>
         <span className="note">{rows.length}/{items.length} sản phẩm</span>
         <span className="sp" />
         <input type="search" className="search" aria-label="Tìm theo tên" placeholder="Tìm theo tên" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -172,5 +173,147 @@ export function MarketProducts() {
         </div>
       </div>
     </>
+  )
+}
+
+// ---- Tab "Sản phẩm tôi đã xem" (Market Research): dạng thẻ gọn, ảnh + link nguồn là chính, chi tiết dài mở bằng nút.
+const DECISIONS = ['Chưa quyết', 'Quan tâm', 'Làm tiếp', 'Bỏ'] as const
+interface Added { id: string; name: string; link: string; image: string; note: string; date: string; decision: string }
+interface SeenMeta { decisions: Record<string, string>; added: Added[] }
+const SEEN_KEY = 'store-hub:mr-seen:v1' // cùng khóa với bản trước để không mất dữ liệu đã ghi
+const loadSeen = (): SeenMeta => {
+  try { const j = JSON.parse(localStorage.getItem(SEEN_KEY) ?? ''); return { decisions: j.decisions ?? {}, added: j.added ?? [] } } catch { return { decisions: {}, added: [] } }
+}
+const saveSeen = (m: SeenMeta) => { try { localStorage.setItem(SEEN_KEY, JSON.stringify(m)) } catch { /* không lưu được thì bỏ qua */ } }
+
+/** Nút nguồn: có link thì là nút bấm; thiếu thì chip mờ "Chưa có …" (không dùng chữ "Trống"). */
+function SrcChip({ href, kind }: { href: string; kind: string }) {
+  if (!href) return <span className="chip-miss" title={`Chưa có link ${kind}`}>Chưa có {kind}</span>
+  return <a className="chip-link" href={href} target="_blank" rel="noreferrer" title={href}>{label(href)} ↗</a>
+}
+
+const Sel = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+  <select className="fsel" aria-label="Quyết định" value={value} onChange={(e) => onChange(e.target.value)}>{DECISIONS.map((d) => <option key={d}>{d}</option>)}</select>
+)
+
+type Detail = { kind: 'legacy'; p: MarketProduct } | { kind: 'added'; a: Added }
+
+export function MarketSeen() {
+  const [items, setItems] = useState<MarketProduct[] | null>(null)
+  const [meta, setMeta] = useState<SeenMeta>(loadSeen)
+  const [q, setQ] = useState('')
+  const [detail, setDetail] = useState<Detail | null>(null)
+  const [editing, setEditing] = useState<MarketProduct | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [form, setForm] = useState({ name: '', link: '', image: '', note: '', decision: 'Chưa quyết' })
+  useEffect(() => { marketRepo.list().then(setItems) }, [])
+  const upd = (m: SeenMeta) => { setMeta(m); saveSeen(m) }
+  const add = () => {
+    if (!form.name.trim()) return
+    upd({ ...meta, added: [{ id: String(Date.now()), ...form, name: form.name.trim(), date: new Date().toISOString().slice(0, 10) }, ...meta.added] })
+    setForm({ name: '', link: '', image: '', note: '', decision: 'Chưa quyết' })
+    setAdding(false)
+  }
+  const t = q.trim().toLowerCase()
+  const legacy = (items ?? []).filter((p) => !t || `${p.name} ${p.desc} ${p.review} ${p.note}`.toLowerCase().includes(t))
+  const added = meta.added.filter((a) => !t || `${a.name} ${a.note}`.toLowerCase().includes(t))
+  const total = (items?.length ?? 0) + meta.added.length
+  const saveEdit = async (p: MarketProduct) => { await marketRepo.update(p); setItems(await marketRepo.list()); setEditing(null); setDetail(null) }
+
+  const Field2 = ({ k, v }: { k: string; v: string }) => (v ? <div><p className="db-sec">{k}</p><p className="full">{v}</p></div> : null)
+
+  return (
+    <div className="stack">
+      <div className="bar">
+        <h3>Sản phẩm tôi đã xem</h3>
+        <span className="note">{legacy.length + added.length}/{total}</span>
+        <span className="sp" />
+        <input type="search" className="search" aria-label="Tìm theo tên" placeholder="Tìm theo tên" value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="btn pri" onClick={() => setAdding(true)}>+ Thêm sản phẩm</button>
+      </div>
+      <p className="note">12 sản phẩm Legacy lấy từ Google Sheet “Market Research” (bản xuất 09/11/2026), tìm bằng keyword dropship/offer cũ. Quyết định và sản phẩm tự thêm chỉ lưu trong trình duyệt này.</p>
+
+      <div className="card">
+        <div className="scroll">
+          <table className="rt mrt seen">
+            <thead><tr><th>Ảnh</th><th>Sản phẩm</th><th>Nguồn</th><th>Quyết định</th></tr></thead>
+            <tbody>
+              {!items && <tr><td colSpan={4} className="note">Đang tải…</td></tr>}
+              {items && legacy.length + added.length === 0 && <tr><td colSpan={4} className="note">Không có sản phẩm khớp.</td></tr>}
+              {added.map((a) => (
+                <tr key={a.id}>
+                  <td><Thumb src={a.image} alt={a.name} lg /></td>
+                  <td data-label="Sản phẩm">
+                    <div className="sname"><b>{a.name}</b><span><span className="badge src-amin">Amin note</span> thêm {a.date}</span></div>
+                    <p className="clamp2 note">{a.note || 'Chưa có note.'}</p>
+                  </td>
+                  <td data-label="Nguồn"><div className="chips"><SrcChip href={a.link} kind="link" /></div></td>
+                  <td data-label="Quyết định"><div className="chips"><Sel value={a.decision} onChange={(v) => upd({ ...meta, added: meta.added.map((x) => (x.id === a.id ? { ...x, decision: v } : x)) })} /><button className="btn" onClick={() => setDetail({ kind: 'added', a })}>Xem chi tiết</button></div></td>
+                </tr>
+              ))}
+              {legacy.map((p) => {
+                const short = p.review || p.note || p.desc
+                return (
+                  <tr key={p.n}>
+                    <td><Thumb src={p.image} alt={p.name} lg /></td>
+                    <td data-label="Sản phẩm">
+                      <div className="sname"><b>{p.name}</b><span><span className="badge src-legacy">Legacy</span> #{p.n} · keyword dropship/offer cũ</span></div>
+                      <p className="clamp2 note">{short || 'Chưa có note.'}</p>
+                    </td>
+                    <td data-label="Nguồn"><div className="chips"><SrcChip href={p.facebook} kind="Facebook" /><SrcChip href={p.website} kind="website" /></div></td>
+                    <td data-label="Quyết định"><div className="chips"><Sel value={meta.decisions[p.n] ?? 'Chưa quyết'} onChange={(v) => upd({ ...meta, decisions: { ...meta.decisions, [p.n]: v } })} /><button className="btn" onClick={() => setDetail({ kind: 'legacy', p })}>Xem chi tiết</button></div></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <details>
+        <summary>Bảng đầy đủ, sửa tại chỗ (nhấp đúp để sửa)</summary>
+        <MarketProducts title="12 sản phẩm cũ" />
+      </details>
+
+      {adding && (
+        <Modal title="Thêm sản phẩm" onClose={() => setAdding(false)}>
+          <Field label="Tên"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+          <Field label="Link nguồn (Facebook, website, Ad Library)"><input value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} /></Field>
+          <Field label="Ảnh (URL https, tuỳ chọn)"><input value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} /></Field>
+          <Field label="Note"><textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></Field>
+          <Field label="Quyết định"><Sel value={form.decision} onChange={(v) => setForm({ ...form, decision: v })} /></Field>
+          <div className="bar"><button className="btn pri" onClick={add} disabled={!form.name.trim()}>Thêm</button><button className="btn" onClick={() => setAdding(false)}>Hủy</button></div>
+        </Modal>
+      )}
+
+      {detail && !editing && (
+        <Modal title={detail.kind === 'legacy' ? detail.p.name : detail.a.name} onClose={() => setDetail(null)} wide>
+          {detail.kind === 'legacy' ? (
+            <div className="stack">
+              <div className="chips"><span className="badge src-legacy">Legacy result</span><SrcChip href={detail.p.facebook} kind="Facebook" /><SrcChip href={detail.p.website} kind="website" />{detail.p.nameUrl && <a className="chip-link" href={detail.p.nameUrl} target="_blank" rel="noreferrer">Link tên ↗</a>}</div>
+              <Thumb src={detail.p.image} alt={detail.p.name} lg />
+              <p className="note">Nguồn: Google Sheet “Market Research”, bản xuất 09/11/2026 · phương pháp: keyword dropship/offer cũ.</p>
+              <Field2 k="Mô tả" v={detail.p.desc} />
+              <Field2 k="Đánh giá sơ bộ" v={detail.p.review} />
+              <Field2 k="Bước tiếp theo" v={detail.p.next} />
+              <Field2 k="Ghi chú" v={detail.p.note} />
+              <div className="bar"><button className="btn" onClick={() => setEditing(detail.p)}>Sửa đủ</button><button className="btn" onClick={() => setDetail(null)}>Đóng</button></div>
+            </div>
+          ) : (
+            <div className="stack">
+              <div className="chips"><span className="badge src-amin">Amin note</span><SrcChip href={detail.a.link} kind="link" /></div>
+              <Thumb src={detail.a.image} alt={detail.a.name} lg />
+              <p className="note">Amin thêm ngày {detail.a.date}. Chỉ lưu trong trình duyệt này.</p>
+              <Field2 k="Note" v={detail.a.note} />
+              <div className="bar">
+                <button className="btn dng" onClick={() => { upd({ ...meta, added: meta.added.filter((x) => x.id !== (detail as { a: Added }).a.id) }); setDetail(null) }}>Xóa sản phẩm này</button>
+                <button className="btn" onClick={() => setDetail(null)}>Đóng</button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+      {editing && <EditForm key={editing.n} item={editing} onSave={saveEdit} onClose={() => setEditing(null)} />}
+    </div>
   )
 }

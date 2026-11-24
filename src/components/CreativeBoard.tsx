@@ -1,11 +1,86 @@
 import { useState } from 'react'
-import type { Store, Video } from '../data/types'
+import type { Store, Video, VideoInput } from '../data/types'
 import { uid } from '../data/template'
 import { Modal } from './Modal'
 import { Field, Media, Pill, DriveLink } from './ui'
 import type { GenKit, GateState, VideoFlow } from '../data/types'
 import { FlowGates } from './VideoFlowTab'
-import { ReadinessBadge } from './ReadinessBadge'
+import { CreativeRequestForm } from './CreativeRequestForm'
+import { groupCreatives } from '../data/creativeGroups'
+import type { CreativeGroup } from '../data/creativeGroups'
+import { UsedPrompt, UsedInputs } from './UsedAssets'
+import { ConclusionCell, FlowAgentCell, GateCell } from './CreativeEval'
+import { ChecklistTable, ChecklistCount } from './ChecklistTable'
+import { checklistView, flowTextFix } from '../data/checklistView'
+
+// Đối chiếu bài social với creative: post.creative, tiền tố tiêu đề "<ID> · ", tiền tố id bài, tên file media. Chỉ đọc, không ghi.
+const SOC_CH = [['FB', 'FB'], ['IG', 'IG'], ['TT', 'TikTok'], ['YT', 'YT']] as const
+type SocState = { state: 'posted' | 'created'; url?: string; postId: string }
+export function socialOf(store: Store, v: Video): Partial<Record<'FB' | 'IG' | 'TT' | 'YT', SocState>> {
+  const ids = new Set(store.creative.map((c) => c.id))
+  const base = (x: string) => x.split('/').pop() ?? x
+  const mine = new Set((Array.isArray(v.media) ? v.media : v.media ? [v.media] : []).map(base))
+  const out: Partial<Record<'FB' | 'IG' | 'TT' | 'YT', SocState>> = {}
+  for (const [k] of SOC_CH) {
+    for (const p of store.social?.[k]?.posts ?? []) {
+      const head = (p.title ?? '').split(' · ')[0].trim()
+      const hit = p.creative === v.id || (v.archive ?? []).some((a) => a.id === p.creative) || (!ids.has(p.creative ?? '') && (head === v.id || (p.id.startsWith(v.id + '-') && !store.creative.some((c) => c.id !== v.id && c.id.length > v.id.length && p.id.startsWith(c.id + '-'))) || (p.media && mine.has(base(p.media)))))
+      if (!hit) continue
+      const posted = p.status === 'Đã đăng'
+      if (!out[k] || (posted && out[k]!.state !== 'posted')) out[k] = { state: posted ? 'posted' : 'created', url: p.url || undefined, postId: p.id }
+    }
+  }
+  return out
+}
+
+/** Lịch sử phiên bản của một Creative ID: các version khác (và archive lồng sẵn) chỉ để tham chiếu; bản đang hiện nằm trên thẻ. */
+function VersionHistory({ store, g }: { store: Store; g?: CreativeGroup }) {
+  if (!g) return null
+  const items = [...g.history.flatMap((h) => [h, ...(h.archive ?? [])]), ...(g.active.archive ?? [])]
+  if (!items.length) return null
+  return (
+    <details className="arch vh" open={false}>
+      <summary>Lịch sử phiên bản: {items.length} bản ({items.map((a) => `v${a.id.split('-').pop()}`).join(', ')}) · đang hiện {g.label || g.active.id}</summary>
+      {items.map((a) => (
+        <div key={a.id} className="arch-it">
+          <b>{a.id}</b> <span className="note">{a.agent ? `${a.agent} · ` : ''}{a.last_updated ?? '—'} · {a.verdict?.label ?? a.status}</span>
+          <div className="note">{a.hook}</div>
+          {a.media ? mediaList(a.media).map((m) => <Media key={m} src={m} />) : <span className="note">Chưa có video</span>}
+          {a.media ? <div className="note">{mediaList(a.media).map((m) => <a key={m} href={/^https?:/.test(m) ? m : `/media/${m.split('/').map(encodeURIComponent).join('/')}`} target="_blank" rel="noreferrer">Mở {m.split('/').pop()}</a>)}</div> : null}
+          <SocialCell store={store} v={a} />
+          <details className="vh-as"><summary>Prompt &amp; input của {a.id}</summary><UsedPrompt store={store} v={a} /><UsedInputs store={store} v={a} /></details>
+        </div>
+      ))}
+    </details>
+  )
+}
+
+/** Ảnh/preview nhỏ nhất cho cột Video: khung hình giây 0,5 (preload metadata, không tải cả file); rê chuột để xem thử (tắt tiếng). */
+function Thumb({ list }: { list: string[] }) {
+  const [bad, setBad] = useState(false)
+  const src = list[0]
+  if (!src || bad) return <span className="note">Chưa có</span>
+  const url = /^https?:/.test(src) ? src : `/media/${src.split('/').map(encodeURIComponent).join('/')}`
+  const isImg = /\.(png|jpe?g|gif|webp)$/i.test(src)
+  return (
+    <span className="th-wrap" title={src.split('/').pop()}>
+      {isImg ? <img className="th" src={url} alt="" loading="lazy" onError={() => setBad(true)} />
+        : <video className="th" src={`${url}#t=0.5`} muted playsInline preload="metadata" onError={() => setBad(true)}
+            onMouseEnter={(e) => { void e.currentTarget.play().catch(() => {}) }} onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0.5 }} />}
+      {list.length > 1 ? <i className="th-n">{list.length}</i> : null}
+    </span>
+  )
+}
+function SocialCell({ store, v }: { store: Store; v: Video }) {
+  const m = socialOf(store, v)
+  return (
+    <div className="soc-cell">
+      {SOC_CH.map(([k, label]) => { const x = m[k]; return x ? (
+        <span key={k} className={`soc-chip ${x.state}`} title={`${x.state === 'posted' ? 'Đã đăng' : 'Đã tạo post (chưa đăng)'} · ${x.postId}`}>{x.url ? <a href={x.url} target="_blank" rel="noreferrer">{label}</a> : label}{x.state === 'posted' ? ' ✓' : ' ·tạo'}</span>
+      ) : <span key={k} className="soc-chip none" title="Chưa tạo post">{label} –</span> })}
+    </div>
+  )
+}
 
 interface Props {
   store: Store
@@ -23,17 +98,25 @@ export function CreativeBoard({ store, onChange }: Props) {
     setEditing(null)
   }
   const [filter, setFilter] = useState<'all' | 'draft' | 'video'>('all')
-  const drafts = store.creative.filter((v) => !v.media).length
+  // Hàng gọn mặc định (1–2 dòng); bấm vào hàng để mở đầy đủ, bấm lần nữa để thu lại
+  const [open, setOpen] = useState<Set<string>>(() => new Set())
+  const toggle = (id: string) => setOpen((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  // Nhóm theo Creative ID: grid chỉ hiện version đang hiện (active) của mỗi ID; version khác nằm trong "Lịch sử phiên bản" của thẻ
+  const groups = groupCreatives(store.creative)
+  const gOf = new Map(groups.map((g) => [g.active.id, g]))
+  const actives = groups.map((g) => g.active)
+  const drafts = actives.filter((v) => !v.media).length
   // Draft (chưa có video) lên đầu, giữ nguyên thứ tự còn lại
-  const shown = [...store.creative.filter((v) => (filter === 'video' ? !!v.media : filter === 'draft' ? !v.media : true))].sort((a, b) => Number(!!a.media) - Number(!!b.media))
+  const shown = [...actives.filter((v) => (filter === 'video' ? !!v.media : filter === 'draft' ? !v.media : true))].sort((a, b) => Number(!!a.media) - Number(!!b.media))
   const remove = (id: string) => onChange({ ...store, creative: store.creative.filter((x) => x.id !== id) })
 
   return (
     <>
+      <CreativeRequestForm store={store} onCreate={(v) => onChange({ ...store, creative: [v, ...store.creative] })} />
       <div className="bar">
         <h2>Creative</h2>
         <span className="sp" />
-        {([['all', `Tất cả ${store.creative.length}`], ['draft', `Draft ${drafts}`], ['video', `Có video ${store.creative.length - drafts}`]] as const).map(([k, l]) => (
+        {([['all', `Tất cả ${actives.length}`], ['draft', `Draft ${drafts}`], ['video', `Có video ${actives.length - drafts}`]] as const).map(([k, l]) => (
           <button key={k} className={filter === k ? 'btn pri' : 'btn'} aria-pressed={filter === k} onClick={() => setFilter(k)}>{l}</button>
         ))}
         <button className={view === 'card' ? 'btn pri' : 'btn'} aria-pressed={view === 'card'} aria-label="Xem dạng thẻ" title="Dạng thẻ" onClick={() => setView('card')}>▦</button>
@@ -47,27 +130,32 @@ export function CreativeBoard({ store, onChange }: Props) {
           {view === 'list' ? (
                 <div className="vlist-wrap">
                   <table className="vlist">
-                    <thead><tr><th>ID</th><th>Video</th><th>Nguồn</th><th>Prompt</th><th>Ref</th><th>last_updated</th><th /></tr></thead>
+                    <thead><tr>
+                      <th>ID</th><th>Video</th><th>Angle / hook</th><th>Flow</th><th>Agent gen</th>
+                      <th colSpan={3}>Checklist<span className="gh">Theo từng flow</span></th>
+                      <th>Kết luận</th><th>Prompt</th><th>Input<span className="gh">F3: asset đã dùng · F1/F2: ref</span></th><th>Social<span className="gh">đã tạo / đã đăng</span></th><th>last_updated</th><th />
+                    </tr></thead>
                     <tbody>
                       {shown.map((v) => {
-                        const k = v.kit
-                        const items = [k?.tool && `Công cụ: ${k.tool}`, ...(k?.config ? k.config.split(' · ') : [])].filter(Boolean) as string[]
-                        const links = k?.extra?.filter((x) => x.label.startsWith('Link')) ?? []
-                        const notes = k?.extra?.filter((x) => x.label.startsWith('Ref') || x.label.startsWith('Chưa')) ?? []
-                        const slots: [string, string[] | undefined][] = [['Video ref', k?.referenceVideo], ['Nhân vật', k?.character], ['Sản phẩm', k?.product]]
-                        const hasRef = slots.some(([, f]) => f?.length)
+                        if (!open.has(v.id)) return <CompactRow key={v.id} store={store} v={v} g={gOf.get(v.id)} onToggle={() => toggle(v.id)} onEdit={() => setEditing(v)} onRemove={() => { if (window.confirm(`Xóa ${v.id}?`)) remove(v.id) }} />
                         return (
-                          <tr key={v.id}>
-                            <td className="vl-id"><div className="vl-scroll"><b>{v.id}</b>{!v.media && <div><Pill tone="warn">Draft</Pill></div>}<FlowGates v={v} /><ReadinessBadge store={store} v={v} /><div className="note">{v.title}</div></div></td>
-                            <td className="vl-media">{v.media ? <Media src={v.media} /> : <div className="thumb">Chưa có</div>}</td>
-                            <td className="vl-src"><div className="vl-scroll">{items.length ? <ul>{items.map((t) => <li key={t}>{t}</li>)}</ul> : <span className="note">Trống</span>}{links.map((x) => <div key={x.label}><a href={x.text} target="_blank" rel="noreferrer">{x.label} ↗</a></div>)}</div></td>
-                            <td className="vl-prompt">{k?.prompt && <CopyBtn text={k.prompt} label="Copy all prompt" />}<div className="vl-scroll">{k?.prompt ? <p className="note pre">{k.prompt}</p> : <span className="note">Không có</span>}</div></td>
-                            <td className="vl-ref"><div className="vl-scroll">
-                              {slots.map(([label, files]) => files?.length ? <div key={label}><b>{label}</b><div className="kitrow">{files.map((f) => <div key={f}><Media src={f} /><p className="note">{f.split('/').pop()}</p><div className="note"><a href={/^https?:/.test(f) ? f : `/media/${f.split('/').map(encodeURIComponent).join('/')}`} target="_blank" rel="noreferrer">Mở file</a> · {!/^https?:/.test(f) && <><a href={`/media/${f.split('/').map(encodeURIComponent).join('/')}?download=1`} download>Tải về</a> · </>}<DriveLink src={f} /></div></div>)}</div></div> : null)}
-                              {!hasRef && <span className="note">Không có file</span>}
-                              <RefActions id={v.id} kit={k} />
-                              {notes.map((x) => <p key={x.label} className="note pre">{x.text}</p>)}
-                            </div></td>
+                          <tr key={v.id} className="vl-open" id={`row-${v.id}`}>
+                            <td className="vl-id"><button type="button" className="vl-tg open" onClick={() => toggle(v.id)} aria-expanded="true" aria-controls={`row-${v.id}`} aria-label={`Thu gọn chi tiết ${v.id}`} title="Thu gọn chi tiết"><span aria-hidden="true">▾</span></button><b>{v.id}</b></td>
+                            <td className="vl-media">{v.media ? mediaList(v.media).map((m) => <Media key={m} src={m} />) : <div className="thumb">Chưa có</div>}</td>
+                            <td className="vl-angle"><div className="vl-scroll"><div><b>Angle:</b> {v.angle || '—'}</div><div><b>Hook:</b> {v.hook || '—'}</div><VersionHistory store={store} g={gOf.get(v.id)} /></div></td>
+                            <td className="vl-flow"><div className="vl-cell"><FlowAgentCell v={v} part="flow" /></div></td>
+                            <td className="vl-agent"><div className="vl-cell"><FlowAgentCell v={v} part="agent" /></div></td>
+                            {v.flowChecks ? <td className="vl-gate vl-fck" colSpan={3}><div className="vl-cell vl-cell-free"><ChecklistTable v={v} /></div></td> : (
+                              <>
+                                <td className="vl-gate"><div className="vl-cell"><span className="gh">Cổng A · Prompt (trước gen)</span><GateCell v={v} k="A" /></div></td>
+                                <td className="vl-gate"><div className="vl-cell"><span className="gh">Cổng C · Ảnh neo</span><GateCell v={v} k="C" /></div></td>
+                                <td className="vl-gate"><div className="vl-cell"><span className="gh">Cổng B · Video (sau gen)</span><GateCell v={v} k="B" /></div></td>
+                              </>
+                            )}
+                            <td className="vl-ready"><div className="vl-cell"><ConclusionCell store={store} v={v} /></div></td>
+                            <td className="vl-prompt"><div className="vl-cell"><UsedPrompt store={store} v={v} /></div></td>
+                            <td className="vl-ref"><div className="vl-cell vl-cell-free">{v.inputs ? <InputList v={v} /> : <UsedInputs store={store} v={v} />}</div></td>
+                            <td className="vl-soc"><SocialCell store={store} v={v} /></td>
                             <td className="vl-upd">{v.last_updated ?? <span className="note">—</span>}</td>
                             <td className="vl-act"><button className="link" onClick={() => setEditing(v)}>Sửa</button><button className="link bad" onClick={() => { if (window.confirm(`Xóa ${v.id}?`)) remove(v.id) }}>Xóa</button></td>
                           </tr>
@@ -85,7 +173,7 @@ export function CreativeBoard({ store, onChange }: Props) {
                 <div className="vgrid">
                   {list.map((v) => (
                     <div className="vid" key={v.id}>
-                      {v.media ? <div className="vmedia"><Media src={v.media} /></div> : <div className="thumb">Chưa có video</div>}
+                      {v.media ? <div className="vmedia">{mediaList(v.media).map((m) => <Media key={m} src={m} />)}</div> : <div className="thumb">Chưa có video</div>}
                       <div className="vbody">
                         <div className="bar">
                           <b>{v.id}</b>
@@ -93,8 +181,8 @@ export function CreativeBoard({ store, onChange }: Props) {
                           <Pill>Cổng {v.gate}</Pill>
                         </div>
                         <FlowGates v={v} />
-                        <ReadinessBadge store={store} v={v} />
-                        {v.flowNote && <p className="note full"><b>Flow / quyền:</b> {v.flowNote}</p>}
+                        <ConclusionCell store={store} v={v} />
+                        {v.flowNote && <p className="note full"><b>Flow / quyền:</b> {flowTextFix(v.flowNote)}</p>}
                         <div>{v.title}</div>
                         {v.last_updated && <div className="note full"><b>last_updated:</b> {v.last_updated}</div>}
                         {v.format && <div className="note full"><b>Format:</b> {v.format}</div>}
@@ -102,6 +190,7 @@ export function CreativeBoard({ store, onChange }: Props) {
                         {v.step && <p className="note full"><b>Bước hiện tại:</b> {v.step}</p>}
                         {v.note && <p className="note pre full">{v.note}</p>}
                         {v.kit && <Kit kit={v.kit} id={v.id} />}
+                        <VersionHistory store={store} g={gOf.get(v.id)} />
                         <div className="rowact">
                           <button className="link" onClick={() => setEditing(v)}>Sửa</button>
                           <button className="link bad" onClick={() => remove(v.id)}>Xóa</button>
@@ -122,6 +211,7 @@ export function CreativeBoard({ store, onChange }: Props) {
   )
 }
 
+const mediaList = (m: string | string[]) => (Array.isArray(m) ? m : [m])
 const TOOLS = ['Higgsfield Marketing Studio', 'Higgsfield Genjutsu', 'Muse (muse.ai)', 'Google Flow', 'Khác']
 const MODES = ['', 'UGC Selfie Testimonial', 'Camera POV', 'Mess to Fresh', 'Unboxing', 'Khác']
 const HOOKS = ['', 'Spicy', 'Product Crash', 'Epic Fail', 'Không hook']
@@ -148,8 +238,9 @@ function VideoForm({ video, onSave, onDelete, onClose }: { video?: Video; onSave
   const [prompt, setPrompt] = useState(k?.prompt ?? '')
   const [refVideo, setRefVideo] = useState((k?.referenceVideo ?? []).join('\n'))
   const [refImg, setRefImg] = useState((k?.product ?? []).join('\n'))
-  const [media, setMedia] = useState(video?.media ?? '')
+  const [media, setMedia] = useState(Array.isArray(video?.media) ? video.media.join('\n') : (video?.media ?? ''))
   const [flow, setFlow] = useState<VideoFlow | ''>(video?.flow ?? '')
+  const [agent, setAgent] = useState(video?.agent ?? '')
   const [gA, setGA] = useState<GateState>(video?.gates?.A ?? 'Chưa review')
   const [gC, setGC] = useState<GateState>(video?.gates?.C ?? 'Chưa review')
   const [gB, setGB] = useState<GateState>(video?.gates?.B ?? 'Chưa review')
@@ -159,7 +250,7 @@ function VideoForm({ video, onSave, onDelete, onClose }: { video?: Video; onSave
     const fields = { mode, hook, setting, product, avatar, duration, resolution, aspect, audio }
     const config = [mode && `Mode ${mode}`, hook && `Hook ${hook}`, setting && `Setting ${setting}`, product && `Product ${product}`, avatar && `Avatar ${avatar}`, resolution, duration, aspect, `Audio ${audio.toLowerCase()}`].filter(Boolean).join(' · ')
     const kit = { ...video?.kit, tool, config, fields, prompt, referenceVideo: lines(refVideo), product: lines(refImg) }
-    onSave({ gate: 'C', status: 'Chưa qua cổng', ...video, last_updated: new Date().toISOString().slice(0, 10), id: id.trim(), title: title.trim() || id.trim(), media: media.trim() || undefined, kit, flow: flow || undefined, gates: { A: gA, C: gC, B: gB } })
+    onSave({ gate: 'C', status: 'Chưa qua cổng', ...video, last_updated: new Date().toISOString().slice(0, 10), id: id.trim(), title: title.trim() || id.trim(), media: media.trim() ? (media.includes('\n') ? lines(media) : media.trim()) : undefined, kit, flow: flow || undefined, agent: agent.trim() || undefined, gates: { A: gA, C: gC, B: gB } })
   }
   const sel = (v: string, set: (x: string) => void, opts: string[]) => (
     <select value={v} onChange={(e) => set(e.target.value)}>{opts.map((o) => <option key={o} value={o}>{o || '—'}</option>)}</select>
@@ -172,6 +263,7 @@ function VideoForm({ video, onSave, onDelete, onClose }: { video?: Video; onSave
         <Field label="Mã"><input id="v-id" value={id} disabled={!!video} onChange={(e) => setId(e.target.value)} /></Field>
         <Field label="Công cụ">{sel(tool, setTool, TOOLS)}</Field>
         <Field label="Flow (KAN-102)">{sel(flow, (x) => setFlow(x as VideoFlow | ''), FLOWS)}</Field>
+        <Field label="Agent gen">{sel(agent, setAgent, ['', 'Muse', 'Flow'])}</Field>
       </div>
       <div className="grid2">
         <Field label="Cổng A · prompt">{sel(gA, (x) => setGA(x as GateState), GATE_STATES)}</Field>
@@ -203,14 +295,6 @@ function VideoForm({ video, onSave, onDelete, onClose }: { video?: Video; onSave
   )
 }
 
-
-function CopyBtn({ text, label }: { text: string; label: string }) {
-  const [ok, setOk] = useState(false)
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(text); setOk(true); setTimeout(() => setOk(false), 2000) } catch { window.prompt('Copy prompt:', text) }
-  }
-  return <button className="btn pri" onClick={copy}>{ok ? 'Đã copy ✓' : label}</button>
-}
 
 function RefActions({ id, kit }: { id: string; kit?: GenKit }) {
   const [msg, setMsg] = useState('')
@@ -266,4 +350,73 @@ export function Kit({ kit, id }: { kit: GenKit; id?: string }) {
       </div>
     </div>
   )
+}
+
+// Cột Input (Flow 3): liệt kê asset đầu vào thực sự đã dùng, có thumbnail và xem trước; thiếu file/bằng chứng thì ghi rõ.
+const mediaUrl = (p: string, start?: number, end?: number) => `/media/${p.split('/').map(encodeURIComponent).join('/')}${start !== undefined ? `#t=${start}${end !== undefined ? `,${end}` : ''}` : ''}`
+function InputList({ v }: { v: Video }) {
+  const [open, setOpen] = useState<VideoInput | null>(null)
+  const xs = v.inputs ?? []
+  return (
+    <div className="fin-list" aria-label={`Input của ${v.id}`}>
+      <p className="note fin-h">{xs.length} input đã dùng{v.inputsSource ? <> · nguồn: <span className="mono">{v.inputsSource.split('/').pop()}</span></> : null}</p>
+      {xs.map((x) => (
+        <div key={x.id} className="fin">
+          {x.thumb ? (
+            <button className="fin-th" onClick={() => setOpen(x)} aria-label={`Xem ${x.name}`} title={x.preview === 'audio' ? 'Nghe' : 'Xem'}><img src={mediaUrl(x.thumb)} alt="" loading="lazy" /><span aria-hidden="true">{x.preview === 'video' ? '▶' : ''}</span></button>
+          ) : x.preview === 'audio' && x.path ? (
+            <button className="fin-th fin-au" onClick={() => setOpen(x)} aria-label={`Nghe ${x.name}`}>♪</button>
+          ) : <div className="fin-th fin-none" role="img" aria-label="Chưa có bằng chứng">Chưa có bằng chứng</div>}
+          <div className="fin-b">
+            <div><b>{x.id}</b> <span className="pill idle">{x.type}</span></div>
+            <div className="fin-n">{x.name}</div>
+            <div className="note">Vai trò: {x.role} · {x.at}</div>
+            <div className="note">Nguồn: {/^https?:/.test(x.source) ? <a href={x.source} target="_blank" rel="noreferrer">{x.source}</a> : x.source}</div>
+            {x.path ? <div className="note">File: <span className="mono">{x.path.split('/').slice(-3).join('/')}</span></div> : <div className="note"><b>Chưa có bằng chứng</b> (không có file đã lưu)</div>}
+            <div className="note">Quyền: {x.rights}</div>
+            <div className="note">Xác minh: {x.verify}</div>
+            {x.note ? <div className="note">Ghi chú: {x.note}</div> : null}
+            {x.path ? <div className="note"><button className="link" onClick={() => setOpen(x)}>{x.preview === 'audio' ? 'Nghe' : 'Xem'}</button> · <a href={mediaUrl(x.path, x.start, x.end)} target="_blank" rel="noreferrer">Mở file</a></div> : null}
+          </div>
+        </div>
+      ))}
+      {open && (
+        <Modal title={`${open.id} · ${open.name}`} onClose={() => setOpen(null)}>
+          {open.preview === 'video' && <video className="fin-pv" src={mediaUrl(open.path, open.start, open.end)} controls playsInline preload="metadata" />}
+          {open.preview === 'image' && <img className="fin-pv" src={mediaUrl(open.path)} alt={open.name} />}
+          {open.preview === 'audio' && <audio className="fin-au-pl" src={mediaUrl(open.path)} controls preload="metadata" />}
+          <p className="note">{open.role} · {open.at}{open.start !== undefined ? ` · clip nguồn ${open.start}–${open.end} s` : ''}</p>
+          <p className="note">Quyền: {open.rights}</p>
+          <div className="actions"><button className="btn" onClick={() => setOpen(null)}>Đóng</button></div>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+// Hàng gọn: mỗi ô tối đa 1–2 dòng, chỉ tóm tắt; mở hàng để xem đủ.
+function CompactRow({ store, v, g, onToggle, onEdit, onRemove }: { store: Store; v: Video; g?: CreativeGroup; onToggle: () => void; onEdit: () => void; onRemove: () => void }) {
+  const ckBad = (checklistView(v)?.groups ?? []).flatMap((g) => g.rows).filter((r) => r.s === 'bad').map((r) => r.label)
+  const label = v.verdict?.label ?? '—'
+  const tone = label === 'Sẵn sàng' ? 'ok' : label === 'Chưa làm' || label === '—' ? 'idle' : 'bad'
+  const nMedia = v.media ? mediaList(v.media).length : 0
+  return (
+    <tr className="vl-cz" id={`row-${v.id}`}>
+      <td className="vl-id"><button type="button" className="vl-tg" onClick={onToggle} aria-expanded="false" aria-controls={`row-${v.id}`} aria-label={`Mở chi tiết ${v.id}`} title="Mở chi tiết"><span aria-hidden="true">▸</span></button><b>{v.id}</b>{(g?.history.length ?? 0) + (v.archive?.length ?? 0) ? <span className="arch-b" title="Có version cũ trong Lịch sử phiên bản">+{(g?.history.length ?? 0) + (v.archive?.length ?? 0)} cũ</span> : null}</td>
+      <td className="vl-media">{nMedia ? <Thumb list={mediaList(v.media!)} /> : <span className="note">Chưa có</span>}</td>
+      <td className="vl-angle"><div className="cz-clamp">{v.angle || v.hook || v.title || '—'}</div></td>
+      <td className="vl-flow"><FlowAgentCell v={v} part="flow" /></td>
+      <td className="vl-agent"><FlowAgentCell v={v} part="agent" /></td>
+      <td className="vl-gate vl-fck" colSpan={3}>{v.flowChecks ? (
+        <div className="cz-ck"><ChecklistCount v={v} />{ckBad.length ? <span className="cz-clamp1 note">Không đạt: {ckBad.slice(0, 3).join(' · ')}</span> : null}</div>
+      ) : <span className="note">{v.gates ? 'Cổng A/C/B cũ' : 'Chưa chấm'}</span>}</td>
+      <td className="vl-ready"><Pill tone={tone}>{label}</Pill>{v.verdict?.gen ? <span className="note cz-gen">Gen: {v.verdict.gen}</span> : null}</td>
+      <td className="vl-prompt"><UsedPrompt store={store} v={v} compact /></td>
+      <td className="vl-ref">{v.inputs ? <span className="note">{v.inputs.length} input</span> : <UsedInputs store={store} v={v} compact />}</td>
+      <td className="vl-soc"><SocialCell store={store} v={v} /></td>
+      <td className="vl-upd">{v.last_updated ?? <span className="note">—</span>}</td>
+      <td className="vl-act"><button className="link" onClick={onEdit}>Sửa</button><button className="link bad" onClick={onRemove}>Xóa</button></td>
+    </tr>
+  )
+  void store
 }

@@ -17,21 +17,27 @@ export const REQUIRED_PRODUCT: Array<[number, string]> = [
 
 export interface Check {
   product: { done: number; total: number; missing: string[] }
-  creative: { total: number; passed: number; doing: number }
+  creative: { total: number; passed: number; failed: number; unreviewed: number; evaluated: number; keep: number; fix: number; drop: number; unknown: number }
   social: { live: string[]; none: string[]; posts: number; posted: number }
   missingCount: number
 }
 
 export function checkStore(s: Store): Check {
   const missing = REQUIRED_PRODUCT.filter(([n]) => !s.productInfo.find((r) => r.n === n)?.value).map(([, l]) => l)
-  const passed = s.creative.filter((v) => v.status === 'Đã qua cổng').length
+  // Qua cổng = cổng A và B đều "Đạt", cổng C "Đạt" hoặc "Không áp dụng". Chưa có gates thì dùng status cũ.
+  const ok = (x?: string) => x === 'Đạt'
+  const passedOf = (v: Store['creative'][number]) => v.gates ? ok(v.gates.A) && ok(v.gates.B) && (ok(v.gates.C) || v.gates.C === 'Không áp dụng') : v.status === 'Đã qua cổng'
+  const failedOf = (v: Store['creative'][number]) => !!v.gates && Object.values(v.gates).some((g) => g?.startsWith('Không đạt'))
+  const passed = s.creative.filter(passedOf).length
+  const failed = s.creative.filter((v) => !passedOf(v) && failedOf(v)).length
+  const rec = (r: string) => s.creative.filter((v) => v.evaluation?.recommend === r).length
   const keys = Object.keys(CHANNELS) as ChannelKey[]
   const live = keys.filter((k) => s.social[k].status === 'Đã đăng bài đầu').map((k) => CHANNELS[k])
   const none = keys.filter((k) => s.social[k].status !== 'Đã đăng bài đầu').map((k) => CHANNELS[k])
   const all = keys.flatMap((k) => s.social[k].posts)
   return {
     product: { done: REQUIRED_PRODUCT.length - missing.length, total: REQUIRED_PRODUCT.length, missing },
-    creative: { total: s.creative.length, passed, doing: s.creative.length - passed },
+    creative: { total: s.creative.length, passed, failed, unreviewed: s.creative.length - passed - failed, evaluated: s.creative.filter((v) => v.evaluation).length, keep: rec('Giữ'), fix: rec('Sửa'), drop: rec('Bỏ'), unknown: rec('Chưa đủ dữ liệu') },
     social: { live, none, posts: all.length, posted: all.filter((p) => p.status === 'Đã đăng').length },
     missingCount: missing.length + (s.creative.length === 0 ? 1 : 0) + (live.length === 0 ? 1 : 0),
   }

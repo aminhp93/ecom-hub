@@ -39,7 +39,7 @@ function inline(t: string, k: string): ReactNode[] {
   return out
 }
 const cells = (l: string) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim())
-function Markdown({ text }: { text: string }) {
+export function Markdown({ text }: { text: string }) {
   const lines = text.replace(/\r/g, '').split('\n')
   const els: ReactNode[] = []
   let i = 0

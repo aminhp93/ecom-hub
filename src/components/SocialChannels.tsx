@@ -21,8 +21,41 @@ export function SocialChannels({ store, onChange }: Props) {
   const [filter, setFilter] = useState<ChannelKey | 'all'>('FB')
   const [openId, setOpenId] = useState<string | null>(null)
   const [more, setMore] = useState<Record<string, boolean>>({})
+  const [syncMsg, setSyncMsg] = useState('')
 
   const allPosts = (Object.keys(CHANNELS) as ChannelKey[]).flatMap((k) => store.social[k].posts.map((p) => [k, p] as const))
+
+  // Đồng bộ các bài "Đã lên lịch" với Zernio: bài Zernio báo published thì chuyển "Đã đăng" + link + ngày thật. Chỉ đọc từ Zernio, không gửi/đăng gì.
+  const syncZernio = async (quiet = false) => {
+    const pending = allPosts.filter(([, p]) => p.status === 'Đã lên lịch')
+    if (pending.length === 0) { if (!quiet) setSyncMsg('Không có bài nào đang "Đã lên lịch".'); return }
+    try {
+      if (!quiet) setSyncMsg('Đang hỏi Zernio…')
+      const r = await fetch(`/zernio/posts?store=${encodeURIComponent(store.id)}&limit=100`)
+      const j = await r.json()
+      if (!r.ok) { if (!quiet) setSyncMsg(`Zernio lỗi ${r.status}: ${JSON.stringify(j).slice(0, 200)}`); return }
+      const zs = ((j.posts ?? []) as ZPost[])
+      const norm = (t?: string) => (t ?? '').replace(/\s+/g, ' ').trim()
+      const social = { ...store.social }
+      let done = 0, failed = 0, waiting = 0
+      for (const [k, p] of pending) {
+        const text = norm([p.caption, p.hashtags].filter(Boolean).join('\n\n'))
+        const cands = zs.filter((z) => (p.zernioId ? z._id === p.zernioId : norm(z.content) === text) && (z.platforms ?? []).some((x) => x.platform === PLATFORM[k]))
+        const byFile = p.file ? cands.filter((z) => (z.mediaItems ?? []).some((m) => m.url.endsWith(p.file as string))) : []
+        const pool = byFile.length ? byFile : cands
+        const plats = pool.flatMap((z) => (z.platforms ?? []).filter((x) => x.platform === PLATFORM[k]).map((x) => ({ z, x })))
+        const pub = plats.find(({ x }) => x.status === 'published' && x.platformPostUrl)
+        let patch: Partial<Post> | null = null
+        if (pub) { patch = { status: 'Đã đăng', url: pub.x.platformPostUrl ?? p.url, date: pub.x.publishedAt ? new Date(pub.x.publishedAt).toLocaleDateString('en-CA') : today, zernioId: pub.z._id }; done++ }
+        else if (plats.some(({ x }) => x.status === 'failed')) { failed++ }
+        else waiting++
+        if (patch) social[k] = { ...social[k], posts: social[k].posts.map((x) => (x.id === p.id ? { ...x, ...patch } : x)) }
+      }
+      if (done) onChange({ ...store, social })
+      setSyncMsg(`Zernio: ${done} bài đã chuyển "Đã đăng"${waiting ? `, ${waiting} còn chờ giờ đăng` : ''}${failed ? `, ${failed} báo lỗi (kiểm trên Zernio)` : ''}.`)
+    } catch (e) { if (!quiet) setSyncMsg(String(e)) }
+  }
+
   const setChannel = (k: ChannelKey, patch: Partial<Store['social'][ChannelKey]>) =>
     onChange({ ...store, social: { ...store.social, [k]: { ...store.social[k], ...patch } } })
 
@@ -44,6 +77,9 @@ export function SocialChannels({ store, onChange }: Props) {
     if (!p.date) patchPost(k, p.id, { date: today })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId])
+
+  // Mở tab Social: tự đồng bộ các bài đang "Đã lên lịch" với Zernio
+  useEffect(() => { void syncZernio(true) }, [store.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const channelCard = (k: ChannelKey) => {
     const c = store.social[k]
@@ -106,7 +142,9 @@ export function SocialChannels({ store, onChange }: Props) {
             </button>
           ))}
           <button className={'chip' + (filter === 'all' ? ' on' : '')} onClick={() => setFilter('all')}>Tất cả ({allPosts.length})</button>
+          <button className="btn" onClick={() => void syncZernio()}>Đồng bộ trạng thái Zernio</button>
         </div>
+        {syncMsg && <p className="note" role="status">{syncMsg}</p>}
         {filter !== 'all' && channelCard(filter)}
         {shown.length === 0 ? <p className="note">Chưa có bài nào.</p> : (
           <div className="scroll">
@@ -172,7 +210,7 @@ export function SocialChannels({ store, onChange }: Props) {
               <section className="pd-col">
                 <h3>1 · Input <span className="note">đầu vào dùng để làm bài</span></h3>
                 <Field label="Tên bài"><input defaultValue={p.title} onBlur={(e) => edit('title', e.target.value)} /></Field>
-                {inp.creative && <p className="note full">Creative nguồn: <b>{inp.creative.id}</b> · {inp.creative.status} · cổng {inp.creative.gate}{inp.creative.step ? ` · ${inp.creative.step}` : ''}</p>}
+                {inp.creative && <p className="note full">Creative nguồn: <b>{inp.creative.id}</b> · {inp.creative.status} · cổng {inp.creative.gate}{inp.creative.step ? ` · ${inp.creative.step}` : ''}{inp.creative.flowName ? ` · Flow: ${inp.creative.flowName}` : ''}{inp.creative.agent ? ` · Agent gen: ${inp.creative.agent}` : ''}</p>}
                 {inp.empty
                   ? <p className="note">Chưa có dữ liệu nguồn tạo, config, prompt hay reference cho bài này trong store hub.</p>
                   : <Kit kit={inp.kit} />}
@@ -199,7 +237,7 @@ export function SocialChannels({ store, onChange }: Props) {
                 <Field label="Link bài đã đăng"><input defaultValue={p.url} placeholder="https://" onBlur={(e) => edit('url', e.target.value)} /></Field>
                 <div className="pd-actions">
                   {(() => {
-                    const z = <ZernioSend channel={k} post={p} store={store} onSent={(url) => patchPost(k, p.id, url ? { url, status: 'Đã lên lịch' } : { status: 'Đã lên lịch' })} onPosted={(url) => patchPost(k, p.id, { url, status: 'Đã đăng', date: new Date().toISOString().slice(0, 10) })} />
+                    const z = <ZernioSend channel={k} post={p} store={store} onSent={(url, zid) => patchPost(k, p.id, { ...(url ? { url } : {}), ...(zid ? { zernioId: zid } : {}), status: 'Đã lên lịch' })} onPosted={(url) => patchPost(k, p.id, { url, status: 'Đã đăng', date: new Date().toISOString().slice(0, 10) })} />
                     // Đã đăng: gập khu gửi Zernio lại để tránh bấm đăng lần hai
                     return posted ? <details className="more"><summary>Đăng lại lên Zernio (bài đã đăng rồi)</summary>{z}</details> : z
                   })()}
@@ -264,6 +302,7 @@ function PostForm({ channel, onSave, onClose }: { channel: ChannelKey; onSave: (
   )
 }
 
+interface ZPost { _id: string; content?: string; mediaItems?: { url: string }[]; platforms?: { platform: string; status?: string; platformPostUrl?: string; publishedAt?: string }[] }
 const PLATFORM: Record<ChannelKey, string> = { FB: 'facebook', IG: 'instagram', TT: 'tiktok', YT: 'youtube' }
 interface ZAccount { _id: string; platform: string; username?: string; displayName?: string }
 
@@ -275,7 +314,7 @@ function belongsToStore(a: ZAccount, store: Store, channel: ChannelKey): boolean
   return names.some((n) => have.some((h) => h && (h.includes(n) || n.includes(h))))
 }
 
-function ZernioSend({ channel, post, store, onSent, onPosted }: { channel: ChannelKey; post: Post; store: Store; onSent: (url?: string) => void; onPosted: (url: string) => void }) {
+function ZernioSend({ channel, post, store, onSent, onPosted }: { channel: ChannelKey; post: Post; store: Store; onSent: (url?: string, zernioId?: string) => void; onPosted: (url: string) => void }) {
   const [accounts, setAccounts] = useState<ZAccount[] | null>(null)
   const [err, setErr] = useState('')
   const [accountId, setAccountId] = useState('')
@@ -320,7 +359,7 @@ function ZernioSend({ channel, post, store, onSent, onPosted }: { channel: Chann
         return
       }
       setMsg(mode === 'draft' ? 'Đã lưu nháp trên Zernio. Vào dashboard Zernio để xem và đăng.' : 'Đã hẹn giờ trên Zernio.')
-      if (mode === 'schedule') onSent()
+      if (mode === 'schedule') onSent(undefined, ((j as { post?: { _id?: string } }).post?._id) ?? undefined)
     } catch (e) { setMsg(String(e)) } finally { setBusy(false) }
   }
 

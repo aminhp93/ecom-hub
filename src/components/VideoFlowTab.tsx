@@ -1,74 +1,12 @@
 import type { Store, Video, VideoFlow } from '../data/types'
-import { DEFAULT_WORKFLOW, FALLBACK, FLOW_DOC, FLOW_DOC_VERSION, FLOW_LABEL, GATES, GATE_TONE, LEDGER_TONE, P0_EVIDENCE, RIGHTS_TONE, ROUTER } from '../data/videoFlows'
+import { FLOW_LABEL, GATES, GATE_TONE, LEDGER_TONE, RIGHTS_TONE } from '../data/videoFlows'
 import { Pill } from './ui'
 
-// Tab "Video flow" (KAN-102): router 2 flow (A/B), flow + cổng của từng creative, asset ledger của store.
+// Asset ledger của store (KAN-102). Router/flow/cổng nay nằm ở trang Tài liệu và bảng Creative.
 export function VideoFlowTab({ store }: { store: Store }) {
-  const videos = store.creative.filter((v) => v.flow)
   const ledger = store.assetLedger ?? []
-  const flows: VideoFlow[] = ['A', 'B', '1', '2a', '2b', '3']
   return (
     <>
-      <div className="card">
-        <div className="bar">
-          <h2>Chọn flow (router)</h2>
-          <span className="sp" />
-          <span className="note">Theo <span className="mono">{FLOW_DOC}</span> ({FLOW_DOC_VERSION})</span>
-        </div>
-        <div className="scroll">
-          <table className="rt">
-            <thead><tr><th>Đang có</th><th>Muốn</th><th>Flow</th><th>Cách làm</th></tr></thead>
-            <tbody>
-              {ROUTER.map((r) => (
-                <tr key={r.flow}>
-                  <td data-label="Đang có">{r.have}</td>
-                  <td data-label="Muốn">{r.want}</td>
-                  <td data-label="Flow"><b>{r.flow}</b></td>
-                  <td data-label="Cách làm" className="note">{r.note}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="vf-two">
-          <div>
-            <b>Workflow mặc định</b>
-            <ol className="vf-steps">{DEFAULT_WORKFLOW.map((x) => <li key={x}>{x}</li>)}</ol>
-          </div>
-          <div>
-            <b>Fallback (theo thứ tự)</b>
-            <ol className="vf-steps">{FALLBACK.map((x) => <li key={x}>{x}</li>)}</ol>
-          </div>
-        </div>
-        <p className="banner">{P0_EVIDENCE}</p>
-      </div>
-
-      <div className="card">
-        <div className="bar">
-          <h2>Flow và cổng của creative</h2>
-          <span className="sp" />
-          {flows.map((f) => <Pill key={f}>Flow {f}: {videos.filter((v) => v.flow === f).length}</Pill>)}
-        </div>
-        <p className="note">Flow của các video làm trước KAN-102 được gán hồi tố ngày 13/11/2026 theo công cụ và ref ghi trong kit (chưa xác minh từng video). Cổng: "Đạt" lấy theo trạng thái "Đã qua cổng" cũ (Amin chốt); còn lại là "Chưa review" cho tới khi có review độc lập.</p>
-        {videos.length === 0 ? <p className="note">Store này chưa có creative gắn flow.</p> : (
-          <div className="scroll">
-            <table className="rt">
-              <thead><tr><th>ID</th><th>Flow</th>{GATES.map(([k, l]) => <th key={k}>{l}</th>)}<th>Ghi chú flow / quyền</th></tr></thead>
-              <tbody>
-                {[...videos].sort((a, b) => a.flow!.localeCompare(b.flow!)).map((v) => (
-                  <tr key={v.id}>
-                    <td data-label="ID"><b>{v.id}</b><div className="note">{v.title}</div></td>
-                    <td data-label="Flow"><FlowPill flow={v.flow!} /></td>
-                    {GATES.map(([k, l]) => <td key={k} data-label={l}><GatePill v={v} k={k} /></td>)}
-                    <td data-label="Ghi chú" className="note">{v.flowNote ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
       <div className="card">
         <div className="bar">
           <h2>Asset ledger</h2>
@@ -107,9 +45,10 @@ export function FlowPill({ flow }: { flow: VideoFlow }) {
   return <span title={FLOW_LABEL[flow]}><Pill tone={flow === '2b' ? 'bad' : flow === 'A' || flow === 'B' ? 'ok' : 'idle'}>Flow {flow}</Pill></span>
 }
 
+const GATE_HELP: Record<'A' | 'C' | 'B', string> = { A: 'Cổng A: kiểm prompt trước gen (đúng truth, một hình thái, hook, claim, credit)', C: 'Cổng C: kiểm ảnh neo trước gen clip (đủ bộ, cùng khung, nhân vật nhất quán)', B: 'Cổng B: kiểm video sau gen (sản phẩm, hành động, chữ, hook, CTA, lỗi AI, watermark)' }
 export function GatePill({ v, k }: { v: Video; k: 'A' | 'C' | 'B' }) {
   const s = v.gates?.[k] ?? 'Chưa review'
-  return <Pill tone={GATE_TONE[s]}>{k}: {s}</Pill>
+  return <span title={GATE_HELP[k]}><Pill tone={GATE_TONE[s]}>{k}: {s}</Pill></span>
 }
 
 // Dòng pill gọn cho CreativeBoard

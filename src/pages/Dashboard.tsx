@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { dashboardRepo } from '../data'
 import { fetchJira, mergeJira } from '../data/dashboardRepo'
+import { ProgressStrip, ResultVideos, WorklogGroup, useTaskItems } from '../components/TaskProgress'
 import type { DashboardData, DashLink, DashTask, DashVerify, DashWidget } from '../data/dashboardTypes'
 import { Preview } from './TikTok'
+import { FocusTimer } from '../focusTimer'
 
 const WD = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -59,12 +61,12 @@ function Steps({ t }: { t: DashTask }) {
   const now = fresh(lines(t.notes?.progress)), next = fresh(lines(t.notes?.next))
   const wait = lines(t.notes?.blocker).map((x) => x.replace(/^Chờ [^:]{1,20}:\s*/i, ''))
   if (![done, now, next, wait].some((x) => x.length)) return <span className="db-unv">—</span>
-  const doneShown = open ? done : done.slice(-3)
+  const doneShown = open ? done : done.slice(-1)
   return (
     <ol className="st">
       {done.length > doneShown.length && <li className="st-more"><button className="link" onClick={() => setOpen(true)}>+{done.length - doneShown.length} bước đã xong</button></li>}
       {doneShown.map((x, i) => <li key={`d${i}`} className="st-done"><Cp text={x} /></li>)}
-      {open && done.length > 3 && <li className="st-more"><button className="link" onClick={() => setOpen(false)}>Thu gọn</button></li>}
+      {open && done.length > 1 && <li className="st-more"><button className="link" onClick={() => setOpen(false)}>Thu gọn</button></li>}
       {now.map((x, i) => <li key={`n${i}`} className="st-now"><Cp text={x} /></li>)}
       {wait.map((x, i) => <li key={`w${i}`} className="st-wait"><b>Đang chờ</b> <Cp text={x} /></li>)}
       {next.map((x, i) => <li key={`x${i}`} className="st-next"><Cp text={x} /></li>)}
@@ -111,24 +113,26 @@ function Other({ links }: { links: DashLink[] }) {
   return <details className="io-other"><summary>Khác ({links.length})</summary><Links list={links} miss="" /></details>
 }
 
-function TaskCard({ t }: { t: DashTask }) {
+function TaskCard({ t, bare }: { t: DashTask; bare?: boolean }) {
   // Hạn chỉ làm nổi bật khi còn ≤ 3 ngày hoặc đã trễ (Amin, 09/11).
   const hot = !!t.due && daysTo(t.due) <= 3
   const all = [...(t.inputs ?? []).map((l) => ({ l, from: 'in' as const })), ...(t.outputs ?? []).map((l) => ({ l, from: 'out' as const })), ...(t.progressFile ? [{ l: t.progressFile, from: 'out' as const }] : [])]
   const by = (slot: Slot) => all.filter((x) => slotOf(x.l) === slot).map((x) => x.l)
+  const wl = useTaskItems(t.key)
   const other = (from: 'in' | 'out') => all.filter((x) => slotOf(x.l) === 'other' && x.from === from).map((x) => x.l)
   return (
     <article className={`tc${hot ? ' hot' : ''}`}>
-      <header className="tc-h">
+      {!bare && <header className="tc-h">
         {t.jira?.url
           ? <a className="db-jk" href={t.jira.url} target="_blank" rel="noreferrer">{t.jira.key}</a>
           : <code className="db-jk">{t.key}</code>}
         {t.due && <DueChip due={t.due} />}
-      </header>
-      <h3 className="tc-t">{t.t}</h3>
+        <FocusTimer k={t.key} />
+      </header>}
+      {!bare && <h3 className="tc-t">{t.t}</h3>}
       <div className="tc-cols">
         <section>
-          <p className="tc-fl">Input</p>
+          <p className="tc-fl">1. Input</p>
           {t.notes?.objective && <div className="io"><em>Mục tiêu</em><p>{t.notes.objective}</p></div>}
           <div className="io">
             <em>Requirement</em>
@@ -139,13 +143,8 @@ function TaskCard({ t }: { t: DashTask }) {
           <Other links={other('in')} />
         </section>
         <section>
-          <p className="tc-fl">Tiến độ</p>
-          <Steps t={t} />
-          <SlotRow name="Tiến độ" links={by('prog')} />
-          <SlotRow name="Lịch sử" links={by('hist')} />
-        </section>
-        <section>
-          <p className="tc-fl">Output</p>
+          <p className="tc-fl">2. Output</p>
+          <ResultVideos items={wl.items} />
           <SlotRow name="Tóm tắt" links={by('sum')} />
           <div className="io">
             <em>Verify</em>
@@ -154,27 +153,62 @@ function TaskCard({ t }: { t: DashTask }) {
           </div>
           <Other links={other('out')} />
         </section>
+        <section>
+          <p className="tc-fl">3. Progress</p>
+          <ProgressStrip items={wl.items} loading={wl.loading} error={wl.error} />
+          {!wl.loading && !wl.items.length && <Steps t={t} />}
+          <SlotRow name="Chi tiết" links={[...by('prog'), ...by('hist')]} />
+        </section>
       </div>
+      <section className="tc-wl">
+        <p className="tc-fl">4. Worklog</p>
+        <WorklogGroup task={t.key} items={wl.items} loading={wl.loading} error={wl.error} />
+      </section>
     </article>
   )
 }
 
-function TaskTable({ title, tasks, grouped }: { title: string; tasks: DashTask[]; grouped?: boolean }) {
-  const groups = useMemo(() => {
-    if (!grouped) return [['', tasks]] as [string, DashTask[]][]
-    const g: Record<string, DashTask[]> = {}
-    tasks.forEach((t) => (g[t.project || 'Khác'] ||= []).push(t))
-    return Object.entries(g)
-  }, [tasks, grouped])
+function brief(t: DashTask) {
+  const x = lines(t.notes?.progress)
+  const y = x.length ? x : lines(t.notes?.next)
+  return y[0] ?? ''
+}
+
+function TaskTable({ title, tasks }: { title: string; tasks: DashTask[] }) {
+  const [open, setOpen] = useState<Set<string>>(new Set())
+  const toggle = (k: string) => setOpen((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
+  const groups: [string, DashTask[]][] = [['', tasks]]
   return (
     <div className="stack">
       {title && <p className="db-sec">{title} <span className="note">{tasks.length}</span></p>}
-      {groups.map(([g, list]) => (
-        <div key={g || title} className="stack">
-          {g && <p className="db-grp-h">{g}</p>}
-          <div className="tc-g">{list.map((t) => <TaskCard key={t.key} t={t} />)}</div>
+      {tasks.length > 0 && (
+        <div className="tbl-wrap">
+          <table className="tt">
+            <thead><tr><th className="tt-k">Key</th><th>Việc</th><th className="tt-s">Trạng thái</th><th className="tt-d">Hạn</th><th className="tt-p">Tiến độ gần nhất</th><th className="tt-x" aria-label="Mở chi tiết" /></tr></thead>
+            {groups.map(([g, list]) => (
+              <tbody key={g || title}>
+                {list.map((t) => {
+                  const hot = !!t.due && daysTo(t.due) <= 3
+                  const on = open.has(t.key)
+                  return [
+                    <tr key={t.key} className={`tt-r${hot ? ' hot' : ''}${on ? ' on' : ''}`} onClick={() => toggle(t.key)}>
+                      <td className="tt-k">{t.jira?.url
+                        ? <a className="db-jk" href={t.jira.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{t.jira.key}</a>
+                        : <code className="db-jk">{t.key}</code>}</td>
+                      <td className="tt-t" title={t.t}>{t.t}</td>
+                      <td className="tt-s">{t.status ? <span className="pill idle">{t.status}</span> : '—'}</td>
+                      <td className="tt-d">{t.due ? <DueChip due={t.due} /> : '—'}</td>
+                      <td className="tt-p" title={brief(t)}>{brief(t) || '—'}</td>
+                      <td className="tt-x"><button className="link" aria-expanded={on} aria-label={on ? 'Thu gọn' : 'Mở chi tiết'}>{on ? '▾' : '▸'}</button></td>
+                    </tr>,
+                    on && <tr key={t.key + '-d'} className="tt-det"><td colSpan={6}><div className="tt-tm"><FocusTimer k={t.key} /></div><TaskCard t={t} bare /></td></tr>,
+                  ]
+                })}
+              </tbody>
+            ))}
+          </table>
         </div>
-      ))}
+      )}
       {!tasks.length && <p className="note">Trống</p>}
     </div>
   )
@@ -387,6 +421,8 @@ export function Dashboard() {
   const [tab, setTab] = useState<'doing' | 'todo' | 'idea'>('doing')
   const [mode, setModeS] = useState<'list' | 'flow' | 'map'>(() => { try { const v = localStorage.getItem('db-mode'); return v === 'flow' || v === 'map' ? v : 'list' } catch { return 'list' } })
   const setMode = (m: 'list' | 'flow' | 'map') => { setModeS(m); try { localStorage.setItem('db-mode', m) } catch { /* bỏ qua */ } }
+  const [asideOpen, setAsideOpenS] = useState(() => { try { return localStorage.getItem('db-aside') !== '0' } catch { return true } })
+  const setAsideOpen = (v: boolean) => { setAsideOpenS(v); try { localStorage.setItem('db-aside', v ? '1' : '0') } catch { /* bỏ qua */ } }
   const [live, setLive] = useState<{ at?: string; error?: string }>({})
   useEffect(() => {
     let on = true
@@ -420,7 +456,7 @@ export function Dashboard() {
         {live.error && <span className="pill warn" title={live.error}>Jira lỗi, dùng dữ liệu file</span>}
         <span className="note" title={data.lastUpdate.text}>Cập nhật {pad(lu.getHours())}:{pad(lu.getMinutes())} {pad(lu.getDate())}/{pad(lu.getMonth() + 1)}</span>
       </div>
-            <section className="db-main" aria-label="Việc đang làm">
+            <section className={`db-main${asideOpen ? '' : ' aside-closed'}`} aria-label="Việc đang làm">
         <div className="stack db-tasks">
           <div className="db-modes" role="group" aria-label="Chế độ xem">
             <button className={`seg${mode === 'list' ? ' on' : ''}`} onClick={() => setMode('list')}>Danh sách</button>
@@ -433,7 +469,7 @@ export function Dashboard() {
             <button role="tab" aria-selected={tab === 'todo'} className="tab" onClick={() => setTab('todo')}>To do ({data.todo.length})</button>
             <button role="tab" aria-selected={tab === 'idea'} className="tab" onClick={() => setTab('idea')}>Idea ({data.idea.length})</button>
           </div>
-          {tab === 'doing' ? <TaskTable title="" tasks={doing} /> : <TaskTable title={tab === 'idea' ? 'Idea' : 'To do'} tasks={queued} grouped />}
+          {tab === 'doing' ? <TaskTable title="" tasks={doing} /> : <TaskTable title={tab === 'idea' ? 'Idea' : 'To do'} tasks={queued} />}
           {doneDetail.length > 0 && (
             <details className="more">
               <summary>Đã xong gần đây, có chi tiết ({doneDetail.length})</summary>
@@ -443,8 +479,11 @@ export function Dashboard() {
           </>}
         </div>
         <aside className="stack db-aside">
+          <button className="side-toggle db-aside-toggle" onClick={() => setAsideOpen(!asideOpen)} aria-expanded={asideOpen} aria-label={asideOpen ? 'Thu gọn cột phải' : 'Mở cột phải'} title={asideOpen ? 'Thu gọn cột phải' : 'Mở cột phải'}>{asideOpen ? '›' : '‹'}</button>
+          {asideOpen && <>
           <Attention widgets={data.widgets} />
           <div className="card"><Calendar data={data} /></div>
+          </>}
         </aside>
       </section>
       <details className="more"><summary>Chi tiết các mảng ({data.widgets.length})</summary><div className="db-wg">{data.widgets.map((w) => <WidgetCard key={w.id} w={w} />)}</div></details>

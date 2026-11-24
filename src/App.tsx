@@ -2,45 +2,84 @@ import { useEffect, useState } from 'react'
 import { useStores } from './useStores'
 import { StoreList } from './pages/StoreList'
 import { StoreDetail } from './pages/StoreDetail'
-import { MarketProducts } from './pages/MarketProducts'
+import { MarketResearch } from './pages/MarketResearch'
 import { Dashboard } from './pages/Dashboard'
 import { TikTok } from './pages/TikTok'
-import { Docs } from './pages/Docs'
+import { Docs, DOC_PAGES, docSlug } from './pages/Docs'
+import { Today } from './pages/Today'
+import { FocusDock } from './focusTimer'
+import { WorklogPanel, SessionDock, useWorklogRoute, useWorklogSection } from './components/WorklogPanel'
+import { effectiveHash } from './worklogNav'
 
-const isProducts = (): boolean => window.location.hash === '#/products'
+// Route mới #/market-research (và #/market-research/quy-trinh). #/products là link cũ: vẫn mở được, tự chuyển sang route mới (giữ phần sau, vd. #/products/x).
+const MR = '#/market-research'
+const isProducts = (): boolean => effectiveHash() === MR || effectiveHash().startsWith(`${MR}/`) || effectiveHash() === '#/products' || effectiveHash().startsWith('#/products/')
+const legacyProducts = (): void => {
+  const h = window.location.hash
+  if (h === '#/products' || h.startsWith('#/products/')) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${MR}${h.slice('#/products'.length)}`)
+}
+legacyProducts()
 
-const isDash = (): boolean => window.location.hash === '#/dashboard'
+const isToday = (): boolean => effectiveHash() === '#/today' || effectiveHash().startsWith('#/today/')
 
-const isTiktok = (): boolean => window.location.hash === '#/tiktok'
+const isDash = (): boolean => effectiveHash() === '#/dashboard'
 
-const isDocs = (): boolean => window.location.hash === '#/docs'
+const isTiktok = (): boolean => effectiveHash() === '#/tiktok'
 
-const NAV = [
-  { href: '#/', label: 'Store', icon: 'M2 6l1-3h10l1 3M2 6v7h12V6M2 6h12M6 13V9h4v4' },
-  { href: '#/products', label: 'Sản phẩm Market Research', icon: 'M8 2l5 2.5v7L8 14l-5-2.5v-7zM3 4.5L8 7l5-2.5M8 7v7' },
-  { href: '#/dashboard', label: 'Bảng điều khiển', icon: 'M2 2h5v6H2zM9 2h5v3H9zM9 7h5v7H9zM2 10h5v4H2z' },
-  { href: '#/tiktok', label: 'TikTok Shop US', icon: 'M3 3v10M3 3h8l-2 3 2 3H3' },
-  { href: '#/docs', label: 'Tài liệu', icon: 'M4 2h6l3 3v9H4zM10 2v3h3M6 8h5M6 11h5' },
+const isDocs = (): boolean => effectiveHash() === '#/docs' || effectiveHash().startsWith('#/docs/')
+
+type NavItem = { href: string; label: string; icon: string }
+const ICON = {
+  store: 'M2 6l1-3h10l1 3M2 6v7h12V6M2 6h12M6 13V9h4v4',
+  mr: 'M8 2l5 2.5v7L8 14l-5-2.5v-7zM3 4.5L8 7l5-2.5M8 7v7',
+  today: 'M8 2v2M8 12v2M2 8h2M12 8h2M4 4l1.2 1.2M10.8 10.8L12 12M12 4l-1.2 1.2M5.2 10.8L4 12M8 5.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5z',
+  dash: 'M2 2h5v6H2zM9 2h5v3H9zM9 7h5v7H9zM2 10h5v4H2z',
+  tiktok: 'M3 3v10M3 3h8l-2 3 2 3H3',
+  docs: 'M4 2h6l3 3v9H4zM10 2v3h3M6 8h5M6 11h5',
+}
+// Thứ tự menu (KAN-131): Hôm nay, Bảng điều khiển, Dropship (Store, Market Research), TikTok Shop US, Tài liệu. Route giữ nguyên.
+const NAV: (NavItem | { group: string; items: NavItem[] })[] = [
+  { href: '#/today', label: 'Hôm nay', icon: ICON.today },
+  { href: '#/dashboard', label: 'Bảng điều khiển', icon: ICON.dash },
+  { group: 'Dropship', items: [
+    { href: '#/', label: 'Store', icon: ICON.store },
+    { href: MR, label: 'Market Research', icon: ICON.mr },
+  ] },
+  { href: '#/tiktok', label: 'TikTok Shop US', icon: ICON.tiktok },
+  { href: '#/docs', label: 'Tài liệu', icon: ICON.docs },
 ]
 
 const parse = (): string | null => {
-  const m = window.location.hash.match(/^#\/store\/(.+)$/)
+  const m = effectiveHash().match(/^#\/store\/(.+)$/)
   return m ? decodeURIComponent(m[1]) : null
+}
+
+function NavLink({ n, current, kid }: { n: NavItem; current: string; kid?: boolean }) {
+  return (
+    <a className={`side-item${kid ? ' side-kid' : ''}`} href={n.href} title={n.label} aria-label={n.label} aria-current={n.href === current ? 'page' : undefined}>
+      <svg className="side-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d={n.icon} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <span className="side-label">{n.label}</span>
+    </a>
+  )
 }
 
 export default function App() {
   const { stores, loaded, create, save, remove, reset } = useStores()
   const [id, setId] = useState<string | null>(parse)
   const [products, setProducts] = useState(isProducts)
+  const [today, setToday] = useState(isToday)
   const [dash, setDash] = useState(isDash)
   const [tiktok, setTiktok] = useState(isTiktok)
   const [docs, setDocs] = useState(isDocs)
+  const [, setTick] = useState(0)
+  const wlTask = useWorklogRoute()
+  const wlSec = useWorklogSection()
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('sh-side-collapsed') === '1' } catch { return false }
   })
 
   useEffect(() => {
-    const on = () => { setId(parse()); setProducts(isProducts()); setDash(isDash()); setTiktok(isTiktok()); setDocs(isDocs()) }
+    const on = () => { legacyProducts(); setId(parse()); setProducts(isProducts()); setToday(isToday()); setDash(isDash()); setTiktok(isTiktok()); setDocs(isDocs()); setTick((t) => t + 1) }
     window.addEventListener('hashchange', on)
     return () => window.removeEventListener('hashchange', on)
   }, [])
@@ -48,7 +87,7 @@ export default function App() {
   const open = (sid: string) => { window.location.hash = `#/store/${encodeURIComponent(sid)}` }
   const back = () => { window.location.hash = '' }
   const store = id ? stores.find((s) => s.id === id) : undefined
-  const current = docs ? '#/docs' : tiktok ? '#/tiktok' : dash ? '#/dashboard' : products ? '#/products' : '#/'
+  const current = docs ? '#/docs' : tiktok ? '#/tiktok' : today ? '#/today' : dash ? '#/dashboard' : products ? MR : '#/'
   const toggle = () => {
     setCollapsed((c) => {
       try { localStorage.setItem('sh-side-collapsed', c ? '0' : '1') } catch { /* không lưu được thì bỏ qua */ }
@@ -58,6 +97,9 @@ export default function App() {
 
   return (
     <div className={`shell${collapsed ? ' collapsed' : ''}`}>
+    <FocusDock />
+    <SessionDock />
+    {wlTask && <WorklogPanel key={wlTask} task={wlTask} section0={wlSec} />}
     <aside className="side">
       <div className="side-head">
         <button className="side-toggle" onClick={toggle} aria-label={collapsed ? 'Mở rộng menu' : 'Thu gọn menu'} aria-expanded={!collapsed} title={collapsed ? 'Mở rộng menu' : 'Thu gọn menu'}>
@@ -65,11 +107,27 @@ export default function App() {
         </button>
       </div>
       <nav className="side-nav" aria-label="Menu">
-        {NAV.map((n) => (
-          <a key={n.href} className="side-item" href={n.href} title={n.label} aria-label={n.label} aria-current={n.href === current ? 'page' : undefined}>
-            <svg className="side-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d={n.icon} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <span className="side-label">{n.label}</span>
-          </a>
+        {NAV.map((n) => 'group' in n ? (
+          <div key={n.group} className="side-grp side-dropship">
+            <p className="side-dg">{n.group}</p>
+            {n.items.map((c) => <NavLink key={c.href} n={c} current={current} kid />)}
+          </div>
+        ) : (
+          <div key={n.href} className="side-grp">
+            <NavLink n={n} current={current} />
+            {n.href === '#/docs' && docs && (
+              <div className="side-sub">
+                {DOC_PAGES.map((p, i) => (
+                  <div key={p.slug} className="side-dgw">
+                    {(i === 0 || DOC_PAGES[i - 1].group !== p.group) && <p className="side-dg">{p.group}</p>}
+                    <a className="side-item side-subitem" href={`#/docs/${p.slug}`} title={p.label} aria-current={p.slug === docSlug() ? 'location' : undefined}>
+                      <span className="side-label">{p.label}</span>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
       </nav>
     </aside>
@@ -78,10 +136,12 @@ export default function App() {
         <Docs />
       ) : tiktok ? (
         <TikTok />
+      ) : today ? (
+        <Today />
       ) : dash ? (
         <Dashboard />
       ) : products ? (
-        <MarketProducts />
+        <MarketResearch />
       ) : !loaded ? (
         <p className="note">Đang tải…</p>
       ) : id && store ? (

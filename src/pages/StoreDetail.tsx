@@ -1,15 +1,13 @@
 import { useState } from 'react'
 import type { Store } from '../data/types'
-import { Meter, Pill, StatusPill } from '../components/ui'
 import { StoreForm } from '../components/StoreForm'
 import { Modal } from '../components/Modal'
 import { ProductInfoTable } from '../components/ProductInfoTable'
 import { CreativeBoard } from '../components/CreativeBoard'
 import { ChecklistPanel } from '../components/ChecklistPanel'
-import { TaskAgents } from '../components/TaskAgents'
 import { SocialChannels } from '../components/SocialChannels'
 import { ShopifyPreviewTab } from '../components/ShopifyPreviewTab'
-import { VideoFlowTab } from '../components/VideoFlowTab'
+import { ResearchTab } from '../components/ResearchTab'
 
 interface Props {
   store: Store
@@ -18,17 +16,17 @@ interface Props {
   onRemove: (id: string) => Promise<void>
 }
 
-type Tab = 'product' | 'creative' | 'social' | 'shopify' | 'tasks'
+type Tab = 'product' | 'research' | 'creative' | 'social' | 'shopify'
 
 export function StoreDetail({ store, onBack, onSave, onRemove }: Props) {
   const [tab, setTab] = useState<Tab>('product')
   const [dialog, setDialog] = useState<'edit' | 'delete' | null>(null)
   const tabs: Array<[Tab, string]> = [
     ['product', 'Product info'],
+    ['research', 'Nghiên cứu'],
     ['creative', 'Creative'],
     ['social', 'Social'],
     ['shopify', 'Preview Shopify'],
-    ['tasks', 'Task & agent'],
   ]
 
   return (
@@ -43,13 +41,6 @@ export function StoreDetail({ store, onBack, onSave, onRemove }: Props) {
           <h1>
             {store.name} <span className="sub">· {store.product}</span>
           </h1>
-          <div className="meta">
-            <StatusPill status={store.status} />
-            <Pill>{store.jira || 'Chưa có Jira'}</Pill>
-            <Pill>Thị trường: {store.market}</Pill>
-            <Pill>Cập nhật {store.updated}</Pill>
-            <Meter value={store.productInfo.filter((r) => r.value).length} max={store.productInfo.length} />
-          </div>
         </div>
         <div className="rowact">
           <button className="btn" onClick={() => setDialog('edit')}>Sửa store</button>
@@ -66,9 +57,9 @@ export function StoreDetail({ store, onBack, onSave, onRemove }: Props) {
       </div>
       <div className="stack">
         {tab === 'product' && <ProductInfoTable store={store} onChange={onSave} />}
-        {tab === 'creative' && (<><CreativeBoard store={store} onChange={onSave} /><h2 className="sec-h">Video flow</h2><VideoFlowTab store={store} /></>)}
+        {tab === 'research' && <ResearchTab store={store} />}
+        {tab === 'creative' && <CreativeBoard store={store} onChange={onSave} />}
         {tab === 'shopify' && <ShopifyPreviewTab store={store} />}
-        {tab === 'tasks' && <TaskAgents store={store} onChange={onSave} />}
         {tab === 'social' && <SocialChannels key={`${store.id}-${store.updated}`} store={store} onChange={onSave} />}
       </div>
 

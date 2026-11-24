@@ -13,18 +13,13 @@ export function ChecklistPanel({ store }: { store: Store }) {
       </div>
       <div>
         <h3>Creative <Pill tone={c.creative.total ? 'ok' : 'warn'}>{c.creative.total} video</Pill></h3>
-        <p>{c.creative.passed} đã qua cổng · {c.creative.doing} đang làm / chưa qua cổng</p>
+        <p>{c.creative.passed} qua cổng (A, B đạt) · {c.creative.failed} không đạt · {c.creative.unreviewed} chưa review</p>
+        <p className="note">Đánh giá KAN-115: {c.creative.evaluated}/{c.creative.total} · Giữ {c.creative.keep} · Sửa {c.creative.fix} · Bỏ {c.creative.drop} · Chưa đủ dữ liệu {c.creative.unknown}</p>
       </div>
       <div>
         <h3>Social <Pill tone={c.social.live.length ? 'ok' : 'warn'}>{c.social.live.length}/4 kênh</Pill></h3>
         <p>{c.social.live.length ? `Đang có: ${c.social.live.join(', ')}` : 'Chưa có kênh nào'}</p>
         <p className="note">{c.social.posts} bài trong danh sách · {c.social.posted} đã đăng</p>
-      </div>
-      <div>
-        <h3>Ai đang làm</h3>
-        {(store.tasks ?? []).length === 0 ? <p className="note">Chưa gắn task.</p> : (store.tasks ?? []).map((t) => (
-          <p key={t.id}><b>{t.key}</b>: {t.agents.filter((a) => a.state !== 'Xong').map((a) => `${a.kind} (${a.state})`).join(', ') || 'chưa có agent'}</p>
-        ))}
       </div>
     </div>
   )

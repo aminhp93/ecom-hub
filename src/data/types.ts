@@ -42,27 +42,68 @@ export interface ProductInfoItem {
 
 export interface Video {
   id: string
+  /** Các lần gen cũ của cùng video (số thứ tự trùng, lần gen nhỏ hơn). Chỉ bản mới nhất nằm trong danh sách chính. */
+  archive?: Video[]
+  legacy_id?: string
   title: string
   status: VideoStatus
   gate: Gate
   // Trường tùy chọn (nhập từ artifact; store tạo mới có thể để trống)
+  // Cột "Angle / Hook" chỉ hiện angle + hook; thiếu thì hiện —
+  angle?: string
   format?: string
   hook?: string
   step?: string
   note?: string
   // Đường dẫn video/ảnh tính từ thư mục working (dev) hoặc URL https
-  media?: string
+  media?: string | string[]
   // Ngày cập nhật gần nhất (YYYY-MM-DD); tự ghi khi lưu trong UI
   last_updated?: string
   // Bộ đầu vào cho công cụ gen (vd Higgsfield Genjutsu): video tham chiếu, nhân vật, sản phẩm, prompt. Thiếu thì UI ghi "Không có".
   kit?: GenKit
   // KAN-102: flow tạo video và trạng thái cổng A (prompt) / C (ảnh neo) / B (video)
   flow?: VideoFlow
+  // Hiển thị dễ hiểu (không dùng mã nội bộ làm nhãn chính): tên flow, mô tả ngắn, agent/công cụ gen (Muse | Flow). Có thì bảng Creative dùng; không có thì giữ nhãn cũ.
+  flowName?: string
+  flowDesc?: string
+  agent?: string
+  // Quick Preview ở ô Cổng A/B/C: keyword ngắn + dấu hiệu (ok ✓ / bad ✕ / unk ?), lấy từ review thật; n = ghi chú hiện ở tooltip. Cổng N/A không cần mục.
+  gateChecks?: Partial<Record<GateKey, Array<{ k: string; t?: string; s: 'ok' | 'bad' | 'unk' | 'na'; n?: string }>>>
   gates?: Partial<Record<GateKey, GateState>>
+  // Checklist riêng theo flow (KAN-120/P15, từ F3): 4 nhóm, mức M/C/O, chỉ tiêu chí M hoặc C đang bật quyết định kết luận. Có thì bảng Creative dùng thay cho cổng A/C/B; gateChecks/gates cũ giữ để tương thích.
+  flowChecks?: { schema: string; source?: string; groups: Array<{ id: string; name: string; items: Array<{ k: string; t: string; tier: 'M' | 'C' | 'O'; s: 'ok' | 'bad' | 'unk' | 'na'; n?: string; cond?: string; ft?: 'Chặn' | 'Hậu kỳ'; stage?: 'G' | 'P' }> }>; flow?: string; gateGen?: string }
+  brief?: { goal: string; channel?: string; duration?: string; cta?: boolean; text?: boolean; voice?: boolean; music?: boolean; ai?: boolean; source?: string }
+  // Flow 3: tài nguyên đầu vào thực sự đã dùng (cột Input). Không có file/bằng chứng thì để path rỗng, UI ghi "Chưa có bằng chứng".
+  inputs?: VideoInput[]
+  // Yêu cầu gen từ form tạo creative (placeholder, chưa nối agent)
+  genRequest?: { flow: 'F1' | 'F2' | 'F3'; agent: string; model: string; inputMode: 'auto' | 'manual'; inputs: string[]; structure?: string; createdAt: string }
+  inputsSource?: string
+  verdict_prev?: { label: string; by: string; date: string; source?: string }
   // Ghi chú về flow/quyền ref (vd ref chưa rõ quyền, đề xuất gỡ bài)
   flowNote?: string
   // Bằng chứng đầu vào cho bảng "Mức sẵn sàng" (8 tiêu chí). Điểm do readiness.ts tính, không nhập tay.
   readiness?: ReadinessInput
+  // KAN-115 B4: đánh giá ads/social cụ thể
+  evaluation?: CreativeEval
+  // Kết luận tổng của verify độc lập (cột "Kết luận"): có thì ưu tiên; không có thì suy từ readiness (chỉ Sẵn sàng khi Final approved)
+  verdict?: { label: 'Sẵn sàng' | 'Chưa sẵn sàng' | 'Chưa làm'; gen?: string; reasons?: { chan?: string[]; hauky?: string[]; chua?: string[]; chung?: string; next?: string }; by: string; date: string; source?: string }
+}
+
+// KAN-115 B4: đánh giá cụ thể từng creative (ads vs social). Do Claude-A ghi, chờ verify.
+export interface EvalVariant {
+  tool: string; file: string; dur: number; res: string; audio: string
+  gates: Record<string, string>   // G1–G7: Đạt | Sai | Không xác minh được
+  Q: Record<string, number | null>; S: Record<string, number | null>
+  adsScore: number; adsMax: number; socScore: number; socMax: number
+  ads: string; soc: string; adsOk: boolean; socOk: boolean; blocked: boolean; unverified: number; note: string
+}
+export interface CreativeEval {
+  date: string; by: string; verify: string
+  flowV2: string; flowRaw: string
+  seen: boolean
+  variants?: EvalVariant[]
+  bestTool?: string; ads: string; social: string; adsScore?: string; socScore?: string
+  recommend: 'Giữ' | 'Sửa' | 'Bỏ' | 'Chưa đủ dữ liệu'; recommendNote: string
 }
 
 export interface ReadinessInput {
@@ -111,6 +152,8 @@ export interface Post {
   creative?: string
   // Tiêu đề đăng YouTube (tối đa 100 ký tự)
   ytTitle?: string
+  // Id bài trên Zernio (lưu khi hẹn giờ) để đồng bộ trạng thái
+  zernioId?: string
   // Đầu vào đã dùng để gen video (tham chiếu, nhân vật, sản phẩm, config, prompt)
   kit?: GenKit
 }
@@ -191,3 +234,5 @@ export const EVIDENCE_LABEL: Record<Exclude<Evidence, ''>, { label: string; tone
   supplier_statement: { label: 'Lời nhà bán', tone: 'idle' },
   estimated: { label: 'Ước tính', tone: 'warn' },
 }
+
+export type VideoInput = { id: string; type: string; name: string; source: string; path: string; thumb: string; preview: 'video' | 'image' | 'audio' | 'none'; start?: number; end?: number; role: string; at: string; rights: string; verify: string; note: string }
