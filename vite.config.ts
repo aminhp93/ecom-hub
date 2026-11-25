@@ -52,6 +52,13 @@ function workingDataPlugin(): Plugin {
   }
 }
 
+// Đóng luồng đọc file khi trình duyệt huỷ/đóng kết nối (tua/dừng video) để không rò rỉ file mở (lỗi spawn EBADF, 25/11/2026).
+function sendFile(stream: fs.ReadStream, res: import('http').ServerResponse) {
+  const done = () => stream.destroy()
+  res.on('close', done)
+  stream.on('error', () => { done(); if (!res.writableEnded) res.end() })
+  return stream.pipe(res)
+}
 // Dev/preview only: phục vụ video và ảnh từ thư mục "working" (cha của 1-dropship) tại /media/<đường dẫn tương đối>.
 // Chỉ đọc, chỉ video/ảnh, chặn ../ để không lộ file khác. Bản deploy thật sẽ dùng storage (Supabase) thay thế.
 const TYPES: Record<string, string> = {
@@ -83,8 +90,8 @@ function mediaPlugin(): Plugin {
       const ext = path.extname(f).toLowerCase()
       if (!f.startsWith(root + path.sep) || !fs.existsSync(f) || !fs.statSync(f).isFile()) { res.statusCode = 404; return res.end('not found') }
       const bin: Record<string, string> = { '.pdf': 'application/pdf', ...TYPES }
-      if (bin[ext]) { res.setHeader('Content-Type', bin[ext]); res.setHeader('Content-Disposition', 'inline'); return fs.createReadStream(f).pipe(res) }
-      if (ext === '.html') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return fs.createReadStream(f).pipe(res) }
+      if (bin[ext]) { res.setHeader('Content-Type', bin[ext]); res.setHeader('Content-Disposition', 'inline'); return sendFile(fs.createReadStream(f), res) }
+      if (ext === '.html') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return sendFile(fs.createReadStream(f), res) }
       if (['.md', '.txt', '.csv', '.json'].includes(ext)) { res.setHeader('Content-Type', 'text/plain; charset=utf-8'); return res.end(fs.readFileSync(f, 'utf-8').slice(0, 400000)) }
       if (ext === '.xlsx') {
         const py = `
@@ -129,7 +136,7 @@ print(json.dumps(out,ensure_ascii=False))`
       const t = mt[path.extname(f).toLowerCase()]
       if (!f.startsWith(base + path.sep) || !t || !fs.existsSync(f) || !fs.statSync(f).isFile()) { res.statusCode = 404; return res.end('not found') }
       res.setHeader('Content-Type', t)
-      return fs.createReadStream(f).pipe(res)
+      return sendFile(fs.createReadStream(f), res)
     }
     if (req.url?.startsWith('/open-refs') && req.method === 'POST') {
       // Dev only: gom các file ref (video/ảnh) vào ~/Downloads/store-hub-refs/<tên>/ rồi mở thư mục đó trong Finder để kéo thả lên Higgsfield/Flow.
@@ -184,10 +191,10 @@ print(json.dumps(out,ensure_ascii=False))`
       res.statusCode = 206
       res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`)
       res.setHeader('Content-Length', end - start + 1)
-      fs.createReadStream(file, { start, end }).pipe(res)
+      sendFile(fs.createReadStream(file, { start, end }), res)
     } else {
       res.setHeader('Content-Length', size)
-      fs.createReadStream(file).pipe(res)
+      sendFile(fs.createReadStream(file), res)
     }
   }
   return {
