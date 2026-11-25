@@ -1,4 +1,5 @@
-export interface DashLink { label: string; url?: string; path?: string }
+/** slot: ép file vào ô cố định của thẻ task (req/src/prog/hist/sum/ver/out/refp/other); không có thì đoán theo nhãn. */
+export interface DashLink { label: string; url?: string; path?: string; slot?: string }
 export interface DashNotes {
   objective?: string
   progress?: string
@@ -13,6 +14,7 @@ export interface DashTask {
   requirements?: string[]
   /** Kết quả kiểm từng yêu cầu (mục Verify trên Jira: dòng bắt đầu ✅ / ❌ / ⬜). */
   verify?: DashVerify[]
+  compact?: boolean
   key: string
   t: string
   status: string

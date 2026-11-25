@@ -78,7 +78,7 @@ export const RESEARCH: Record<string, Research> = {
       { c: 'Chữ và caption không claim ngoài truth', map: 'G2' },
       ...COMMON,
     ],
-    forbid: ['Hộp quà, thẻ chữ, khắc chữ, đá (nhiều clip cũ vẫn có hộp quà và thẻ: cần kiểm)', 'Adjustable / one size, chất liệu, giá, giao hàng, đổi trả', '"Forever", "always with you"', 'Angle tưởng nhớ người mất', 'Hiệu quả tâm lý, claim sức khỏe', 'Tarnish-free, lifetime, số khách, 90-day returns, free gift box, 50% off, free shipping'],
+    forbid: ['Khắc chữ, đá; hộp quà và thẻ chữ chỉ cấm trong brief HR-B10 (Amin chốt 17/11), các creative khác không bị chặn vì hộp quà', 'Adjustable / one size, chất liệu, giá, giao hàng, đổi trả', '"Forever", "always with you"', 'Angle tưởng nhớ người mất', 'Hiệu quả tâm lý, claim sức khỏe', 'Tarnish-free, lifetime, số khách, 90-day returns, free gift box, 50% off, free shipping'],
     format: '9:16, 720p, 8 s (Flow) hoặc 10 s (Muse). Muse không nhận ảnh từ Claude nên prompt chỉ dùng chữ.',
     rights: 'Ảnh tham chiếu Hope Rings chỉ để xem nội bộ (ledger HB-TMP-01 not_permitted, chỉ dùng text_only). Clip Flow có ✦ không đăng.',
     competitors: ['Hope Rings (hoperings.com): ad Library 1347264390847048 chỉ học nhịp, không lấy cảnh, chữ, nhạc, người'],

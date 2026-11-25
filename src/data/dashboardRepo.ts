@@ -51,11 +51,12 @@ export function mergeJira(data: DashboardData, issues: JiraIssue[]): DashboardDa
       if (sc.input?.links.length) t.inputs = withLocal(sc.input.links.map((l) => ({ label: l.label, url: l.url })), t.inputs)
       if (sc.output?.links.length) t.outputs = withLocal(sc.output.links.map((l) => ({ label: l.label, url: l.url })), t.outputs)
       t.notes = { ...(t.notes ?? {}) }
-      if (sc.objective) t.notes.objective = sc.objective.text.join('\n')
+      const compact = !!t.compact // compact: thẻ chỉ hiện link + verify cục bộ, không lấy text mục tiêu/requirement/verify từ Jira
+      if (sc.objective && !compact) t.notes.objective = sc.objective.text.join('\n')
       if (sc.progress) t.notes.progress = sc.progress.text.join('\n')
       if (sc.done) t.notes.done = sc.done.text.join('\n')
-      if (sc.requirement) t.requirements = sc.requirement.text
-      if (sc.verify) t.verify = sc.verify.text.map((x) => {
+      if (sc.requirement && !compact) t.requirements = sc.requirement.text
+      if (sc.verify && !compact) t.verify = sc.verify.text.map((x) => {
         const m = /^\s*(✅|✓|☑|\[x\]|❌|✗|✘|\[!\]|⬜|☐|\[ \])?\s*(.*)$/i.exec(x)!
         const g = (m[1] ?? '').toLowerCase()
         return { text: m[2], state: ['✅', '✓', '☑', '[x]'].includes(g) ? 'ok' : ['❌', '✗', '✘', '[!]'].includes(g) ? 'fail' : 'pending' } as const

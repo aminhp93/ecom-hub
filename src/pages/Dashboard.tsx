@@ -29,11 +29,17 @@ function Links({ list, miss }: { list?: DashLink[]; miss: string }) {
   return (
     <>
       {list.map((l, i) => {
-        if (l.url && /^https:\/\//.test(l.url)) return <a key={i} className="db-lk" href={l.url} target="_blank" rel="noreferrer">{l.label}</a>
+        const drive = l.url && /^https:\/\//.test(l.url) ? l.url : null
         const rel = l.path && !l.path.endsWith('/') ? relWorking(l.path) : null
-        return rel
-          ? <button key={i} className="db-lk db-pv" title={`Xem trước: ${rel}`} onClick={() => setPv({ path: rel, title: l.label })}>{l.label}</button>
-          : <span key={i} className="db-lk" title={l.path}>{l.label}</span>
+        // Mặc định bấm tên = xem trước trong web; biểu tượng ↗ nhỏ bên cạnh mở file trên Drive (Amin, 24/11).
+        if (rel) return (
+          <span key={i} className="db-lkw">
+            <button className="db-lk db-pv" title={`Xem trước: ${rel}`} onClick={() => setPv({ path: rel, title: l.label })}>{l.label}</button>
+            {drive && <a className="db-drv" href={drive} target="_blank" rel="noreferrer" title="Mở trên Google Drive" aria-label={`Mở ${l.label} trên Drive`}>↗</a>}
+          </span>
+        )
+        if (drive) return <a key={i} className="db-lk" href={drive} target="_blank" rel="noreferrer">{l.label}</a>
+        return <span key={i} className="db-lk" title={l.path}>{l.label}</span>
       })}
       {pv && <Preview path={pv.path} title={pv.title} onClose={() => setPv(null)} />}
     </>
@@ -88,7 +94,7 @@ function VerifyList({ t }: { t: DashTask }) {
 }
 
 /** Chuẩn file của task (task-hub/<KEY>/): mỗi cột có các "ô" cố định; file không khớp ô nào vào "Khác". */
-type Slot = 'req' | 'src' | 'prog' | 'hist' | 'sum' | 'ver' | 'other'
+type Slot = 'req' | 'src' | 'prog' | 'hist' | 'sum' | 'ver' | 'out' | 'refp' | 'other'
 const SLOT_RE: [Slot, RegExp][] = [
   ['req', /tiêu chí|tieu-chi|yêu cầu|requirement/i],
   ['ver', /đánh giá|danh-gia|verify|kiểm/i],
@@ -97,12 +103,12 @@ const SLOT_RE: [Slot, RegExp][] = [
   ['prog', /tiến độ|tien-do|progress/i],
   ['src', /nguồn|readme|input/i],
 ]
-const slotOf = (l: DashLink): Slot => SLOT_RE.find(([, re]) => re.test(`${l.label} ${l.url ?? l.path ?? ''}`))?.[0] ?? 'other'
+const slotOf = (l: DashLink): Slot => (l.slot as Slot | undefined) ?? SLOT_RE.find(([, re]) => re.test(`${l.label} ${l.url ?? l.path ?? ''}`))?.[0] ?? 'other'
 
 function SlotRow({ name, links }: { name: string; links: DashLink[] }) {
   return (
     <div className="io">
-      <em>{name}</em>
+      {name && <em>{name}</em>}
       {links.length ? <Links list={links} miss="" /> : <span className="db-unv">thiếu</span>}
     </div>
   )
@@ -113,7 +119,7 @@ function Other({ links }: { links: DashLink[] }) {
   return <details className="io-other"><summary>Khác ({links.length})</summary><Links list={links} miss="" /></details>
 }
 
-function TaskCard({ t, bare }: { t: DashTask; bare?: boolean }) {
+export function TaskCard({ t, bare, noWorklog }: { t: DashTask; bare?: boolean; noWorklog?: boolean }) {
   // Hạn chỉ làm nổi bật khi còn ≤ 3 ngày hoặc đã trễ (Amin, 09/11).
   const hot = !!t.due && daysTo(t.due) <= 3
   const all = [...(t.inputs ?? []).map((l) => ({ l, from: 'in' as const })), ...(t.outputs ?? []).map((l) => ({ l, from: 'out' as const })), ...(t.progressFile ? [{ l: t.progressFile, from: 'out' as const }] : [])]
@@ -133,19 +139,20 @@ function TaskCard({ t, bare }: { t: DashTask; bare?: boolean }) {
       <div className="tc-cols">
         <section>
           <p className="tc-fl">1. Input</p>
-          {t.notes?.objective && <div className="io"><em>Mục tiêu</em><p>{t.notes.objective}</p></div>}
-          <div className="io">
+          {!t.compact && t.notes?.objective && <div className="io"><em>Mục tiêu</em><p>{t.notes.objective}</p></div>}
+          {(!t.compact || by('req').length > 0) && <div className="io">
             <em>Requirement</em>
-            {t.requirements?.length ? <ul className="rq">{t.requirements.map((x, i) => <li key={i}>{x}</li>)}</ul> : <span className="db-unv">chưa có</span>}
+            {t.requirements?.length ? <ul className="rq">{t.requirements.map((x, i) => <li key={i}>{x}</li>)}</ul> : !t.compact && <span className="db-unv">chưa có</span>}
             {by('req').length > 0 && <Links list={by('req')} miss="" />}
-          </div>
+          </div>}
           <SlotRow name="Nguồn" links={by('src')} />
           <Other links={other('in')} />
         </section>
         <section>
           <p className="tc-fl">2. Output</p>
           <ResultVideos items={wl.items} />
-          <SlotRow name="Tóm tắt" links={by('sum')} />
+          {!t.compact && <SlotRow name="Tóm tắt" links={by('sum')} />}
+          {by('out').length > 0 && <SlotRow name="File output" links={by('out')} />}
           <div className="io">
             <em>Verify</em>
             <VerifyList t={t} />
@@ -157,13 +164,14 @@ function TaskCard({ t, bare }: { t: DashTask; bare?: boolean }) {
           <p className="tc-fl">3. Progress</p>
           <ProgressStrip items={wl.items} loading={wl.loading} error={wl.error} />
           {!wl.loading && !wl.items.length && <Steps t={t} />}
-          <SlotRow name="Chi tiết" links={[...by('prog'), ...by('hist')]} />
+          <SlotRow name="" links={[...by('prog'), ...by('hist')]} />
+          {by('refp').length > 0 && <details className="io-other"><summary>File tham chiếu ({by('refp').length})</summary><Links list={by('refp')} miss="" /></details>}
         </section>
       </div>
-      <section className="tc-wl">
+      {!noWorklog && <section className="tc-wl">
         <p className="tc-fl">4. Worklog</p>
         <WorklogGroup task={t.key} items={wl.items} loading={wl.loading} error={wl.error} />
-      </section>
+      </section>}
     </article>
   )
 }
@@ -174,7 +182,27 @@ function brief(t: DashTask) {
   return y[0] ?? ''
 }
 
+type WlRow = { key: string; item_id: string; date: string; section_id: string; action: string; status: string }
+/** Từ khóa tiến độ gần nhất: mệnh đề đầu của action ở item worklog mới nhất (theo item_id) của task. */
+function useLatestWorklog() {
+  const [m, setM] = useState<Map<string, WlRow>>(new Map())
+  useEffect(() => {
+    fetch('/worklog/all').then((r) => r.json()).then((d: { items: WlRow[] }) => {
+      const n = new Map<string, WlRow>()
+      for (const r of d.items) { const o = n.get(r.key); if (!o || r.item_id > o.item_id) n.set(r.key, r) }
+      setM(n)
+    }).catch(() => {})
+  }, [])
+  return m
+}
+const keyword = (a: string) => {
+  const c = a.split(/[:;(]| — |, /)[0].trim()
+  const w = c.split(/\s+/)
+  return w.length > 5 ? w.slice(0, 5).join(' ') + '…' : c
+}
+
 function TaskTable({ title, tasks }: { title: string; tasks: DashTask[] }) {
+  const lw = useLatestWorklog()
   const [open, setOpen] = useState<Set<string>>(new Set())
   const toggle = (k: string) => setOpen((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
   const groups: [string, DashTask[]][] = [['', tasks]]
@@ -184,24 +212,25 @@ function TaskTable({ title, tasks }: { title: string; tasks: DashTask[] }) {
       {tasks.length > 0 && (
         <div className="tbl-wrap">
           <table className="tt">
-            <thead><tr><th className="tt-k">Key</th><th>Việc</th><th className="tt-s">Trạng thái</th><th className="tt-d">Hạn</th><th className="tt-p">Tiến độ gần nhất</th><th className="tt-x" aria-label="Mở chi tiết" /></tr></thead>
+            <thead><tr><th className="tt-k">Key</th><th>Việc</th><th className="tt-p">Tiến độ gần nhất</th></tr></thead>
             {groups.map(([g, list]) => (
               <tbody key={g || title}>
                 {list.map((t) => {
                   const hot = !!t.due && daysTo(t.due) <= 3
                   const on = open.has(t.key)
                   return [
-                    <tr key={t.key} className={`tt-r${hot ? ' hot' : ''}${on ? ' on' : ''}`} onClick={() => toggle(t.key)}>
-                      <td className="tt-k">{t.jira?.url
-                        ? <a className="db-jk" href={t.jira.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{t.jira.key}</a>
+                    <tr key={t.key} className={`tt-r${hot ? ' hot' : ''}${on ? ' on' : ''}`}>
+                      <td className="tt-k"><button className="link tt-ex" aria-expanded={on} aria-label={on ? 'Thu gọn' : 'Mở chi tiết'} onClick={() => toggle(t.key)}>{on ? '▾' : '▸'}</button>{t.jira?.url
+                        ? <a className="db-jk" href={t.jira.url} target="_blank" rel="noreferrer">{t.jira.key}</a>
                         : <code className="db-jk">{t.key}</code>}</td>
-                      <td className="tt-t" title={t.t}>{t.t}</td>
-                      <td className="tt-s">{t.status ? <span className="pill idle">{t.status}</span> : '—'}</td>
-                      <td className="tt-d">{t.due ? <DueChip due={t.due} /> : '—'}</td>
-                      <td className="tt-p" title={brief(t)}>{brief(t) || '—'}</td>
-                      <td className="tt-x"><button className="link" aria-expanded={on} aria-label={on ? 'Thu gọn' : 'Mở chi tiết'}>{on ? '▾' : '▸'}</button></td>
+                      <td className="tt-t" title={t.t}><span className="tt-c2">{t.t}</span></td>
+                      <td className="tt-p">{(() => {
+                        const w = lw.get(t.key)
+                        if (!w) return <span className="tt-c2" title={brief(t)}>{brief(t) || '—'}</span>
+                        return <span className="tt-c2" title={`${w.item_id} · ${w.status} · ${w.action}`}><mark className="tt-kw">{keyword(w.action)}</mark> <span className="note">{w.section_id} · {w.date.slice(8)}/{w.date.slice(5, 7)}</span></span>
+                      })()}</td>
                     </tr>,
-                    on && <tr key={t.key + '-d'} className="tt-det"><td colSpan={6}><div className="tt-tm"><FocusTimer k={t.key} /></div><TaskCard t={t} bare /></td></tr>,
+                    on && <tr key={t.key + '-d'} className="tt-det"><td colSpan={3}><div className="tt-tm"><FocusTimer k={t.key} /></div><TaskCard t={t} bare /></td></tr>,
                   ]
                 })}
               </tbody>
@@ -298,7 +327,7 @@ function MapView({ data }: { data: DashboardData }) {
   )
 }
 
-function Calendar({ data }: { data: DashboardData }) {
+export function Calendar({ data }: { data: DashboardData }) {
   const [month, setMonth] = useState(() => { const n = startOfToday(); return new Date(n.getFullYear(), n.getMonth(), 1) })
   const now = iso(startOfToday())
   const marks = useMemo(() => {
@@ -344,7 +373,7 @@ function Calendar({ data }: { data: DashboardData }) {
   )
 }
 
-function Attention({ widgets }: { widgets: DashWidget[] }) {
+export function Attention({ widgets }: { widgets: DashWidget[] }) {
   const groups = widgets
     .filter((w) => w.id !== 'finance') // Finance không đưa vào "Cần chú ý" (Amin, 24/10)
     .map((w) => {
@@ -421,8 +450,6 @@ export function Dashboard() {
   const [tab, setTab] = useState<'doing' | 'todo' | 'idea'>('doing')
   const [mode, setModeS] = useState<'list' | 'flow' | 'map'>(() => { try { const v = localStorage.getItem('db-mode'); return v === 'flow' || v === 'map' ? v : 'list' } catch { return 'list' } })
   const setMode = (m: 'list' | 'flow' | 'map') => { setModeS(m); try { localStorage.setItem('db-mode', m) } catch { /* bỏ qua */ } }
-  const [asideOpen, setAsideOpenS] = useState(() => { try { return localStorage.getItem('db-aside') !== '0' } catch { return true } })
-  const setAsideOpen = (v: boolean) => { setAsideOpenS(v); try { localStorage.setItem('db-aside', v ? '1' : '0') } catch { /* bỏ qua */ } }
   const [live, setLive] = useState<{ at?: string; error?: string }>({})
   useEffect(() => {
     let on = true
@@ -450,13 +477,12 @@ export function Dashboard() {
       <div className="db-top">
         <div>
           <h1>Bảng điều khiển</h1>
-          <p className="note">{WD[t.getDay()]}, {pad(t.getDate())}/{pad(t.getMonth() + 1)}/{t.getFullYear()}</p>
         </div>
         {live.at && <span className="note" title="Trạng thái task lấy trực tiếp từ Jira, làm mới mỗi 90 giây">Jira trực tiếp {pad(new Date(live.at).getHours())}:{pad(new Date(live.at).getMinutes())}</span>}
         {live.error && <span className="pill warn" title={live.error}>Jira lỗi, dùng dữ liệu file</span>}
         <span className="note" title={data.lastUpdate.text}>Cập nhật {pad(lu.getHours())}:{pad(lu.getMinutes())} {pad(lu.getDate())}/{pad(lu.getMonth() + 1)}</span>
       </div>
-            <section className={`db-main${asideOpen ? '' : ' aside-closed'}`} aria-label="Việc đang làm">
+            <section className="db-main solo" aria-label="Việc đang làm">
         <div className="stack db-tasks">
           <div className="db-modes" role="group" aria-label="Chế độ xem">
             <button className={`seg${mode === 'list' ? ' on' : ''}`} onClick={() => setMode('list')}>Danh sách</button>
@@ -478,16 +504,22 @@ export function Dashboard() {
           )}
           </>}
         </div>
-        <aside className="stack db-aside">
-          <button className="side-toggle db-aside-toggle" onClick={() => setAsideOpen(!asideOpen)} aria-expanded={asideOpen} aria-label={asideOpen ? 'Thu gọn cột phải' : 'Mở cột phải'} title={asideOpen ? 'Thu gọn cột phải' : 'Mở cột phải'}>{asideOpen ? '›' : '‹'}</button>
-          {asideOpen && <>
-          <Attention widgets={data.widgets} />
-          <div className="card"><Calendar data={data} /></div>
-          </>}
-        </aside>
       </section>
       <details className="more"><summary>Chi tiết các mảng ({data.widgets.length})</summary><div className="db-wg">{data.widgets.map((w) => <WidgetCard key={w.id} w={w} />)}</div></details>
       <p className="note">Nguồn: {data.source}. Đã xong gần đây: {data.done.map((d) => d.key).join(', ')}.</p>
+    </div>
+  )
+}
+
+/** Cột "Cần chú ý" + Lịch, dùng ở trang Hôm nay (mục 0, trước Summary). */
+export function DashAside() {
+  const [data, setData] = useState<DashboardData | null>(null)
+  useEffect(() => { void dashboardRepo.load().then(setData) }, [])
+  if (!data) return <p className="note">Đang tải…</p>
+  return (
+    <div className="td-aside">
+      <Attention widgets={data.widgets} />
+      <div className="card"><Calendar data={data} /></div>
     </div>
   )
 }

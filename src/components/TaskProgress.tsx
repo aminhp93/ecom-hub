@@ -32,17 +32,9 @@ export function ProgressStrip({ items, loading, error }: { items: WlItem[]; load
   if (loading) return <p className="note">Đang đọc…</p>
   if (error) return <p className="note">Chưa đọc được worklog (chỉ có khi chạy dev cục bộ).</p>
   if (!items.length) return <p className="note">Chưa có lượt nào trong worklog.</p>
-  const count = (s: St) => items.filter((i) => i.status === s).length
-  const done = count('Đã xong')
-  const last = items[items.length - 1]
   const waiting = [...items].reverse().find((i) => i.status !== 'Đã xong' && i.next_or_blocker)?.next_or_blocker
   return (
     <div className="pg">
-      <div className="tp-bar" role="img" aria-label={`${done} trên ${items.length} lượt đã xong`}>
-        {items.map((i) => <span key={i.item_id} className={`tp-seg ${CLS[i.status]}`} title={`${i.section_id}: ${i.section_name} (${i.status})`} />)}
-      </div>
-      <p className="tp-sum"><b>{done}/{items.length}</b> lượt xong{ORDER.filter((s) => count(s)).map((s) => <span key={s} className={`tp-c ${CLS[s]}`}>{count(s)} {s.toLowerCase()}</span>)}</p>
-      <p className="pg-last"><em>Mới nhất</em> {last.section_id}. {last.section_name}</p>
       {waiting && <p className="tp-next"><em>Đang chờ</em> {waiting}</p>}
     </div>
   )

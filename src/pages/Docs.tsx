@@ -346,6 +346,13 @@ const SECTIONS: { slug: string; group: string; title: string; short: string; ren
     ),
   },
   {
+    slug: 'logic-web',
+    group: 'Hệ thống web',
+    title: 'Logic trang Hôm nay và Bảng điều khiển',
+    short: 'Logic Hôm nay / Bảng điều khiển',
+    render: () => <LogicDoc />,
+  },
+  {
     slug: 'market-research',
     group: 'Dropship và thị trường',
     title: 'Market Research',
@@ -364,6 +371,19 @@ const SECTIONS: { slug: string; group: string; title: string; short: string; ren
     ),
   },
 ]
+
+const LOGIC_DOC = '0-dashboard/quy-trinh/logic-trang-hom-nay-va-bang-dieu-khien.md'
+/** Doc logic hai trang Hôm nay + Bảng điều khiển (24/11/2026). Nguồn là file trên Drive; mỗi lần sửa hai trang phải cập nhật file này (AGENTS.md luật 14). */
+function LogicDoc() {
+  const [open, setOpen] = useState(true)
+  return (
+    <Block title="Logic trang Hôm nay và Bảng điều khiển" note="Một file duy nhất để tham chiếu mỗi lần sửa. Sửa trang xong thì thêm dòng vào mục Lịch sử của file. Kiểm lệch: python3 quy-trinh/check-doc-logic.py.">
+      <p><code>{LOGIC_DOC}</code></p>
+      {open ? <Preview path={LOGIC_DOC} title="logic-trang-hom-nay-va-bang-dieu-khien.md" onClose={() => setOpen(false)} />
+        : <button className="link" onClick={() => setOpen(true)}>Xem nội dung</button>}
+    </Block>
+  )
+}
 
 /** Các trang con của Tài liệu, dùng cho menu bên trái (dưới mục Tài liệu). */
 export const DOC_PAGES = SECTIONS.map((x) => ({ slug: x.slug, group: x.group, label: x.short }))

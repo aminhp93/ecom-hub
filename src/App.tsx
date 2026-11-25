@@ -11,6 +11,8 @@ import { FocusDock } from './focusTimer'
 import { WorklogPanel, SessionDock, useWorklogRoute, useWorklogSection } from './components/WorklogPanel'
 import { effectiveHash } from './worklogNav'
 
+const SIDE_WD = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+
 // Route mới #/market-research (và #/market-research/quy-trinh). #/products là link cũ: vẫn mở được, tự chuyển sang route mới (giữ phần sau, vd. #/products/x).
 const MR = '#/market-research'
 const isProducts = (): boolean => effectiveHash() === MR || effectiveHash().startsWith(`${MR}/`) || effectiveHash() === '#/products' || effectiveHash().startsWith('#/products/')
@@ -106,6 +108,7 @@ export default function App() {
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d={collapsed ? 'M6 3l5 5-5 5' : 'M10 3L5 8l5 5'} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
       </div>
+      {!collapsed && <p className="side-date">{SIDE_WD[new Date().getDay()]}, {String(new Date().getDate()).padStart(2, '0')}/{String(new Date().getMonth() + 1).padStart(2, '0')}/{new Date().getFullYear()}</p>}
       <nav className="side-nav" aria-label="Menu">
         {NAV.map((n) => 'group' in n ? (
           <div key={n.group} className="side-grp side-dropship">

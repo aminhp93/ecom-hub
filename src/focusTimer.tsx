@@ -220,15 +220,7 @@ export function FocusDock() {
     window.addEventListener(POPUP, on)
     return () => window.removeEventListener(POPUP, on)
   }, [])
-  // Tiêu đề tab: giờ còn lại của đồng hồ đang chạy gần hết nhất
-  useEffect(() => {
-    const live = keys.map((k) => ({ k, end: parse(raw(k))?.endAt })).filter((x): x is { k: string; end: number } => x.end !== undefined).map((x) => ({ k: x.k, left: x.end - Date.now() })).sort((x, y) => x.left - y.left)[0]
-    if (!live) return
-    const prev = document.title
-    const lk = live.k + (parse(raw(live.k))?.sec ? `/${parse(raw(live.k))!.sec}` : '')
-    document.title = live.left <= 0 ? `${fmtOver(-live.left)} quá · ${lk}` : `${fmtClock(live.left)} · ${lk}`
-    return () => { document.title = prev }
-  }, [keys, tick])
+  // Tiêu đề tab giữ cố định "Ecom Hub" (Amin 24/11): không hiện đếm ngược.
   return (
     <>
       {pop && pop.mode === 'end' && <EndSummaryModal key={`${pop.k}:end`} k={pop.k} startedAt={parse(raw(pop.k))?.startedAt} onFinish={() => clearFocus(pop.k)} onClose={() => setPop(null)} />}

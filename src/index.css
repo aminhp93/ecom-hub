@@ -875,6 +875,10 @@ ol.td-top li.on .td-tick input { accent-color: var(--ok); }
 .wl-cname { font-weight: 600; overflow-wrap: anywhere; }
 .wl-state { font: 600 calc(11.5px * var(--fs)) var(--body); border: 1px solid var(--muted); color: var(--muted); border-radius: 99px; padding: 1px 9px; white-space: nowrap; }
 .wl-state.wait { border-color: var(--bad); color: var(--bad); } .wl-state.done { border-color: var(--ok); color: var(--ok); } .wl-state.doing { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.wl-subs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.wl-subs li { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; border-top: 1px solid var(--line); padding-top: 6px; }
+.wl-subs li a { color: var(--ink); text-decoration: none; overflow-wrap: anywhere; } .wl-subs li a:hover { text-decoration: underline; }
+.wl-subs li .note { grid-column: 1 / -1; }
 .wl-bar { display: block; height: 6px; border-radius: 99px; background: var(--soft); overflow: hidden; flex: 1; min-width: 60px; }
 .wl-bar i { display: block; height: 100%; background: var(--ok); }
 .wl-modal { align-items: start; overflow-y: auto; }
@@ -1133,14 +1137,17 @@ ol.td-top li.on .td-tick input { accent-color: var(--ok); }
 .tt { width: 100%; border-collapse: collapse; font-size: calc(13px * var(--fs)); }
 .tt th { text-align: left; font: 600 calc(11px * var(--fs)) var(--body); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 6px 10px; background: var(--soft); border-bottom: 1px solid var(--line); white-space: nowrap; }
 .tt td { padding: 5px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; height: 34px; }
-.tt-r { cursor: pointer; }
+.tt-r { cursor: default; }
+.tt .tt-ex { margin-right: 4px; padding: 0 4px; cursor: pointer; }
+.tt-kw { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; padding: 0 4px; border-radius: 3px; font-weight: 600; }
 .tt-r:hover td { background: var(--soft); }
 .tt-r.on td { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
 .tt-r.hot td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
 .tt .tt-k, .tt .tt-s, .tt .tt-d { white-space: nowrap; width: 1%; }
 .tt .tt-x { width: 28px; text-align: center; }
-.tt .tt-t { font-weight: 600; max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tt .tt-p { color: var(--muted); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt .tt-t { font-weight: 600; max-width: 380px; }
+.tt .tt-c2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; white-space: normal; line-height: 1.35; }
+.tt .tt-p { color: var(--muted); max-width: 360px; }
 .tt-grp td { font: 600 calc(11px * var(--fs)) var(--body); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--soft); height: auto; }
 .tt-det > td { padding: 8px 12px; background: var(--bg, var(--surface)); }
 .tt-det .tc { margin: 0; box-shadow: none; }
@@ -1311,19 +1318,19 @@ ol.td-top li.on .td-tick input { accent-color: var(--ok); }
 .vl-open td.vl-fck { min-width: 520px; }
 
 /* Today: 3 phần Summary → Brainstorm → Plan */
-.td-phases { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 8px 0 14px; position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 6px 0; }
+.td-phases { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 8px 0 14px; position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 6px 0; }
 .td-phase { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; text-align: left; border: 1px solid var(--line); border-top: 4px solid var(--ph, var(--line)); background: var(--surface); border-radius: 10px; padding: 10px 12px; cursor: pointer; color: var(--ink); font: inherit; }
 .td-phase:hover { background: var(--soft); } .td-phase:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .td-pht { display: grid; } .td-pht b { font: 700 calc(16px * var(--fs)) var(--display); } .td-pht small { font-size: calc(11.5px * var(--fs)); color: var(--muted); }
 .td-phs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: calc(12px * var(--fs)); color: var(--muted); } .td-phs i { font-style: normal; } .td-phs b { color: var(--ink); font-size: calc(15px * var(--fs)); }
 .td-phs .f-ok b { color: var(--ok); } .td-phs .f-bad b { color: var(--bad); } .td-phs .f-now b { color: var(--accent); }
 .td-phb { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 700 calc(13px * var(--fs)) var(--display); background: var(--ph, var(--idle)); color: #fff; flex: none; }
-.td-ph1 { --ph: #3d7a5a; } .td-ph2 { --ph: #8a5d10; } .td-ph3 { --ph: #a8662b; } .td-ph4 { --ph: #3b6ea5; }
+.td-ph0 { --ph: #b04a3a; } .td-ph1 { --ph: #3d7a5a; } .td-ph2 { --ph: #8a5d10; } .td-ph3 { --ph: #a8662b; } .td-ph4 { --ph: #3b6ea5; }
 .td-sec.td-ph { border-left: 5px solid var(--ph); scroll-margin-top: 96px; }
 .td-hint { font-size: calc(12px * var(--fs)); color: var(--muted); margin: 2px 0 0 34px; }
 .td-plan-sub { margin-top: 0; border-left-style: dashed; }
 @media (max-width: 640px) { .td-phases { grid-template-columns: 1fr; position: static; } }
-@media (prefers-color-scheme: dark) { .td-ph1 { --ph: #4f9c76; } .td-ph2 { --ph: #d3a13c; } .td-ph3 { --ph: #d4975a; } .td-ph4 { --ph: #6b9bd1; } }
+@media (prefers-color-scheme: dark) { .td-ph0 { --ph: #d9786a; } .td-ph1 { --ph: #4f9c76; } .td-ph2 { --ph: #d3a13c; } .td-ph3 { --ph: #d4975a; } .td-ph4 { --ph: #6b9bd1; } }
 
 /* Nhóm Dropship trong menu trái (KAN-131) */
 .side-dropship .side-dg { margin: 8px 0 2px 10px; }
@@ -1362,3 +1369,36 @@ ol.td-top li.on .td-tick input { accent-color: var(--ok); }
 .tl-done-chip{opacity:.7;text-decoration:line-through;border-color:#3d7a5a}
 .tl-kwt{font-size:15px}.tl-full{opacity:.65;flex-basis:100%}
 .tl-parked .tl-dot{background:#bbb}.tl-it.prio .tl-card{border-color:#c9962c;box-shadow:0 0 0 1px #c9962c}
+
+.td-hl{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 0}
+.td-hl mark{background:rgba(201,150,44,.28);color:inherit;font-weight:700;font-size:12.5px;padding:2px 8px;border-radius:6px}
+@media (prefers-color-scheme: dark){.td-hl mark{background:rgba(212,151,90,.35)}}
+
+.db-lkw{display:flex;align-items:flex-start;gap:6px}.db-lkw .db-pv{text-align:left}.db-lkw .db-drv{flex:none;line-height:1.3;text-decoration:none;font-size:.85em;color:var(--mut,#888);border:1px solid currentColor;border-radius:4px;padding:0 4px}.db-lkw .db-drv:hover{color:inherit}
+
+/* Ngày trong sidebar trái: chỉ khi mở rộng (không render khi thu gọn) */
+.side-date { margin: 4px 12px 8px; font-size: calc(12px * var(--fs)); color: var(--muted); }
+/* Bảng điều khiển không còn cột phải */
+.db-main.solo { grid-template-columns: minmax(0, 1fr); }
+/* Mục 0 trang Hôm nay: Chú ý + Lịch */
+.td-aside { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 900px) { .td-aside { grid-template-columns: minmax(0, 1fr); } }
+.td-aside .db-attn { border: 0; border-left: 3px solid var(--bad); border-radius: 0; background: transparent; padding: 0 0 0 12px; }
+
+.td-sec.td-ph { background: color-mix(in srgb, var(--ph, var(--accent)) 10%, var(--surface)); border-color: color-mix(in srgb, var(--ph, var(--accent)) 45%, var(--line)); }
+.td-phase.on { box-shadow: inset 0 -3px 0 var(--ph, var(--accent)); border-color: var(--ph, var(--accent)); background: color-mix(in srgb, var(--ph, var(--accent)) 22%, var(--surface)); }
+
+/* Brainstorm = ghi chú của Amin; Plan = bảng đánh giá */
+.td-notes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.td-note { border: 1px solid var(--line); border-left: 4px solid var(--ink); border-radius: 8px; padding: 10px 12px; }
+.td-note b { display: block; margin-bottom: 4px; } .td-note p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.td-eval { width: 100%; border-collapse: collapse; font-size: calc(13px * var(--fs)); }
+.td-eval th { text-align: left; font-weight: 600; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.td-eval td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.td-eval .te-s span, .td-eval .te-w { color: var(--muted); } .td-eval .te-s { min-width: 200px; } .td-eval .te-w { min-width: 220px; }
+.td-eval .te-v { display: inline-block; padding: 1px 8px; border-radius: 999px; font-weight: 600; font-size: calc(12px * var(--fs)); border: 1px solid var(--line); white-space: nowrap; }
+.te-v.now { background: color-mix(in srgb, var(--bad) 14%, transparent); border-color: var(--bad); }
+.te-v.new { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); }
+.te-v.in { background: var(--soft); } .te-v.done { color: var(--ok); border-color: var(--ok); } .te-v.later { color: var(--muted); }
+.td-eval .te-t b { display: block; } .td-eval .te-t small { display: block; color: var(--muted); }
+.td-eval .te-t.yes b { color: var(--ok); } .td-eval .te-t.wait b { color: var(--accent); } .td-eval .te-t.no b { color: var(--muted); font-weight: 500; }

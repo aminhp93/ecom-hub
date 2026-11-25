@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ChannelKey, ChannelStatus, Post, PostFormat, PostStatus, Store } from '../data/types'
+import type { ChannelKey, Post, PostFormat, PostStatus, Store } from '../data/types'
 import { CHANNELS } from '../data/types'
 import { uid } from '../data/template'
 import { Modal } from './Modal'
@@ -88,10 +88,6 @@ export function SocialChannels({ store, onChange }: Props) {
               <div className="ch">
                 <header>
                   <b>{CHANNELS[k]}</b>
-                  <Pill tone={c.status === 'Chưa tạo' ? 'idle' : 'ok'}>{c.status}</Pill>
-                  <select aria-label={`Trạng thái ${CHANNELS[k]}`} value={c.status} onChange={(e) => setChannel(k, { status: e.target.value as ChannelStatus })}>
-                    <option>Chưa tạo</option><option>Đã tạo</option><option>Đã đăng bài đầu</option>
-                  </select>
                 </header>
                 {c.url
                   ? <p><a href={c.url} target="_blank" rel="noreferrer">{c.url}</a></p>
@@ -100,18 +96,17 @@ export function SocialChannels({ store, onChange }: Props) {
                 {open && <>
                 <div className="grid2 chinfo">
                   {([['name', 'Tên kênh'], ['handle', 'Handle / ID'], ['url', 'Link kênh'], ['email', 'Email'], ['category', 'Danh mục']] as const).map(([f, label]) => (
-                    <Field key={f} label={label}>
+                    <Field key={k + f} label={label}>
                       <input aria-label={`${label} ${CHANNELS[k]}`} defaultValue={c[f] ?? ''} placeholder="Chưa có"
                         onBlur={(e) => { if (e.target.value.trim() !== (c[f] ?? '')) setChannel(k, { [f]: e.target.value.trim() }) }} />
                     </Field>
                   ))}
                 </div>
                 <Field label="Mô tả / bio">
-                  <textarea rows={2} aria-label={`Mô tả ${CHANNELS[k]}`} defaultValue={c.description ?? ''} placeholder="Chưa có"
+                  <textarea key={k + 'description'} rows={2} aria-label={`Mô tả ${CHANNELS[k]}`} defaultValue={c.description ?? ''} placeholder="Chưa có"
                     onBlur={(e) => { if (e.target.value.trim() !== (c.description ?? '')) setChannel(k, { description: e.target.value.trim() }) }} />
                 </Field>
                 {c.note && <p className="note full">{c.note}</p>}
-                <div><button className="btn" onClick={() => setAdding(k)}>+ Thêm bài</button></div>
                 </>}
               </div>
     )

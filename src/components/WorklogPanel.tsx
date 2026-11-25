@@ -3,6 +3,8 @@ import { useFetchJson as useFetch } from '../useFetchJson'
 import { SavedSummaries } from './WorklogSummary'
 import { WL_RE, openerKind, rememberReturn, returnHash, wlHref } from '../worklogNav'
 import { runningSection } from '../activeSection'
+import { DASH_SEED } from 'virtual:working-data'
+import { TaskCard } from '../pages/Dashboard'
 import { WL_STATUSES, type WlCounts, type WlItem, type WlQuery, type WlStatus } from '../data/worklogTypes'
 
 /** "Nhật ký phiên hiện tại" (KAN-117 theo worklog/1). Chỉ đọc: gọi cầu nối /worklog/* (dev) chạy parser chuẩn worklog.py; không localStorage, không ghi, không đoán giờ/credit. */
@@ -115,27 +117,52 @@ export function SessionDock() {
   )
 }
 
-/** Các thẻ ở tab Hôm nay: task có phiên hôm nay. Bấm mở panel. */
+/** Nhật ký phiên hiện tại (Amin 24/11): mỗi task một thẻ; trong thẻ liệt kê TỪNG sub-session (section) có việc hôm nay, mỗi cái Xong/Chưa xong riêng.
+ *  Trạng thái task = Jira (không Done = Chưa xong), không suy từ sub-session. Chỉ hiện task/sub-session có việc TRONG NGÀY hôm nay (Amin 24/11). */
+type AllItem = { key: string; item_id: string; date: string; section_id: string; section_name: string; status: WlStatus; action: string; actor: string }
 export function WorklogCards() {
-  const { loading, data, error } = useFetch<{ tasks: ({ key: string; ok: true; query: WlQuery } | { key: string; ok: false; error: string })[] }>('/worklog/active')
+  const all = useFetch<{ items: AllItem[] }>('/worklog/all')
+  const d = new Date(); const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const items = all.data?.items ?? []
+  const doneKeys = new Set((DASH_SEED.done ?? []).map((t) => t.key))
+  const title = new Map([...(DASH_SEED.tasks ?? []), ...(DASH_SEED.done ?? [])].map((t) => [t.key, t.t] as const))
+  const keys = Array.from(new Set(items.filter((i) => i.date === today).map((i) => i.key)))
+  const cards = keys.map((key) => {
+    const mine = items.filter((i) => i.key === key)
+    const bySec = new Map<string, AllItem[]>()
+    for (const i of mine.filter((x) => x.date === today)) bySec.set(i.section_id, [...(bySec.get(i.section_id) ?? []), i])
+    const secs = Array.from(bySec.entries()).map(([sid, its]) => {
+      const fin = its.every((i) => i.status === 'Đã xong')
+      const open = its.find((i) => i.status !== 'Đã xong')
+      return { sid, name: its[0].section_name, fin, detail: fin ? `${its.length}/${its.length} xong` : `${its.filter((i) => i.status === 'Đã xong').length}/${its.length} xong · ${open?.status ?? ''}` }
+    })
+    const last = mine.sort((a, b) => a.item_id.localeCompare(b.item_id)).pop()
+    return { key, title: title.get(key) ?? key, fin: doneKeys.has(key), secs, last }
+  }).sort((a, b) => Number(a.fin) - Number(b.fin) || a.key.localeCompare(b.key, 'en', { numeric: true }))
   return (
     <section className="card td-wl" aria-labelledby="wl-h">
       <h2 id="wl-h">Nhật ký phiên hiện tại</h2>
-      {loading ? <p className="note">Đang đọc worklog…</p>
-        : error ? <p className="err" role="alert">Không đọc được worklog: {error}. (Chỉ chạy được khi dev cục bộ có WORKING_ROOT.)</p>
-        : !data?.tasks.length ? <p className="note">Chưa có việc hôm nay: không task nào có worklog trong ngày.</p>
+      {all.loading ? <p className="note">Đang đọc worklog…</p>
+        : all.error ? <p className="err" role="alert">Không đọc được worklog: {all.error}. (Chỉ chạy được khi dev cục bộ có WORKING_ROOT.)</p>
+        : !cards.length ? <p className="note">Chưa có việc hôm nay: không task nào có worklog trong ngày.</p>
         : (
           <div className="wl-cards">
-            {data.tasks.map((t) => t.ok && t.query.session ? (
-              <a key={t.key} className="wl-card" href={wlHref(t.key, runningSection(t.query))} data-wl={t.key} onClick={() => rememberReturn('card')}>
-                <span className="wl-ctop"><b className="td-key solid">{t.key}{runningSection(t.query) ? `/${runningSection(t.query)}` : ''}</b><span className={`wl-state ${STATUS_CLS[t.query.session.state]}`}>{t.query.session.state}</span></span>
-                <span className="wl-cname">{t.query.session.name === 'unknown' ? `${t.key}/${runningSection(t.query)} (sub-session)` : t.query.session.name}</span>
-                {t.query.session.state === 'Đang làm' && t.query.session.started_at && <LiveClock since={t.query.session.started_at} k={t.key} />}
-                <span className="wl-bar" aria-hidden="true"><i style={{ width: `${(100 * t.query.session.counts['Đã xong']) / Math.max(1, total(t.query.session.counts))}%` }} /></span>
-                <span className="note">{t.query.session.counts['Đã xong']}/{total(t.query.session.counts)} xong{t.query.session.counts['Chờ'] ? ` · ${t.query.session.counts['Chờ']} chờ` : ''}</span>
-              </a>
-            ) : (
-              <div key={t.key} className="wl-card err"><b>{t.key}</b><span className="err">{t.ok ? '' : t.error}</span></div>
+            {cards.map((c) => (
+              <div key={c.key} className="wl-card" data-wl={c.key}>
+                <span className="wl-ctop"><a className="td-key solid" href={wlHref(c.key, '')} onClick={() => rememberReturn('card')}>{c.key}</a><span className={`wl-state ${c.fin ? 'done' : 'wait'}`}>{c.fin ? 'Task: Xong' : 'Task: Chưa xong'}</span></span>
+                <span className="wl-cname">{c.title}</span>
+                {c.secs.length ? (
+                  <ul className="wl-subs">
+                    {c.secs.map((s) => (
+                      <li key={s.sid}>
+                        <a href={wlHref(c.key, s.sid)} onClick={() => rememberReturn('card')} title={s.name}><b>{c.key}/{s.sid}</b> {s.name}</a>
+                        <span className={`wl-state ${s.fin ? 'done' : 'wait'}`}>{s.fin ? 'Xong' : 'Chưa xong'}</span>
+                        <span className="note">{s.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             ))}
           </div>
         )}
@@ -263,6 +290,7 @@ export function WorklogPanel({ task, section0 = '' }: { task: string; section0?:
           : (
             <>
               <Header q={q} section={section} />
+              {(() => { const dt = [...DASH_SEED.tasks, ...(DASH_SEED.todo ?? []), ...(DASH_SEED.idea ?? [])].find((x) => x.key === task); return dt ? <details className="wl-taskinfo" open><summary><b>Input · Output · Progress</b> (cùng dữ liệu với Bảng điều khiển)</summary><TaskCard t={dt} bare noWorklog /></details> : null })()}
               <div className="td-filters" role="group" aria-label="Lọc section">
                 <button className={`td-f${!section ? ' on' : ''}`} aria-pressed={!section} onClick={() => setSection('')}>Tất cả <span>{q.items.length}</span></button>
                 {q.sections.map((s) => (

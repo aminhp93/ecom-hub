@@ -124,7 +124,7 @@ export function Preview({ path, title, onClose }: { path: string; title: string;
       {!data && <p className="note">Đang tải…</p>}
       {data?.kind === 'error' && <p>{data.msg}</p>}
       {data?.kind === 'pdf' && <iframe title={title} src={data.url} style={{ width: '100%', height: '70vh', border: 0 }} />}
-      {data?.kind === 'html' && <iframe title={title} src={data.url} sandbox="allow-scripts" style={{ width: '100%', height: '75vh', border: '1px solid var(--line)', borderRadius: 8 }} />}
+      {data?.kind === 'html' && <iframe title={title} src={data.url} sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" style={{ width: '100%', height: '75vh', border: '1px solid var(--line)', borderRadius: 8 }} />}
       {data?.kind === 'video' && <video src={data.url} controls style={{ maxWidth: '100%', maxHeight: '70vh' }} />}
       {data?.kind === 'image' && <img src={data.url} alt={title} style={{ maxWidth: '100%' }} />}
       {data?.kind === 'text' && data.ext === '.md' && <Markdown text={data.text} />}

@@ -1,10 +1,10 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { TODAY_DAYS } from 'virtual:working-data'
 import { WorklogCards } from '../components/WorklogPanel'
-import { ActiveWork } from '../components/ActiveWork'
 import { AllWorklog } from '../components/AllWorklog'
 import { TimelinePlan } from '../components/TimelinePlan'
-import type { TodayDay, TodayIdea, TodayItem } from '../data/todayTypes'
+import { DashAside } from './Dashboard'
+import type { PlanEval, TodayDay, TodayIdea, TodayItem } from '../data/todayTypes'
 
 /** Tab "Hôm nay" (Morning Overview, KAN-117). Dữ liệu: today/YYYY-MM-DD.json ở Drive, nạp qua virtual:working-data. */
 
@@ -13,22 +13,14 @@ const WD = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 
 const fmtDate = (s: string) => `${WD[new Date(`${s}T00:00:00`).getDay()]}, ${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
-type Filter = 'all' | TodayIdea['kind']
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'Tất cả' },
-  { id: 'has-task', label: 'Có task' },
-  { id: 'no-task', label: 'Chưa có task' },
-  { id: 'unverified', label: 'Chưa xác minh' },
-]
-
 function Key({ k, solid }: { k: string; solid?: boolean }) {
   return <a className={solid ? 'td-key solid' : 'td-key'} href={JIRA + encodeURIComponent(k)} target="_blank" rel="noreferrer" title={`Mở ${k} trên Jira`}>{k}</a>
 }
 
-function Sec({ title, count, children, className = '', phase, hint, id }: { title: string; count?: number; children: ReactNode; className?: string; phase?: 1 | 2 | 3 | 4; hint?: string; id?: string }) {
+function Sec({ title, count, children, className = '', phase, hint, id }: { title: string; count?: number; children: ReactNode; className?: string; phase?: 0 | 1 | 2 | 3 | 4; hint?: string; id?: string }) {
   return (
-    <details id={id} className={`card td-sec ${phase ? `td-ph td-ph${phase} ` : ''}${className}`} open>
-      <summary>{phase && <span className="td-phb" aria-hidden="true">{phase}</span>}<h2>{title}</h2>{count !== undefined && <span className="td-n">{count}</span>}</summary>
+    <details id={id} className={`card td-sec ${phase !== undefined ? `td-ph td-ph${phase} ` : ''}${className}`} open>
+      <summary>{phase !== undefined && <span className="td-phb" aria-hidden="true">{phase}</span>}<h2>{title}</h2>{count !== undefined && <span className="td-n">{count}</span>}</summary>
       {hint && <p className="td-hint">{hint}</p>}
       <div className="td-body">{children}</div>
     </details>
@@ -54,22 +46,25 @@ function Group({ label, items, tone }: { label: string; items: TodayItem[]; tone
 }
 
 /** Cấu trúc trang: 1 Summary (hôm qua) → 2 Brainstorm (ý hôm nay) → 3 Plan (làm gì hôm nay). Bấm để nhảy tới phần. */
-function PhaseNav({ day }: { day: TodayDay }) {
-  const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  const phases: { n: 1 | 2 | 3 | 4; id: string; title: string; sub: string; stats: { v: number; l: string; tone?: string }[] }[] = [
+type Tab = 0 | 1 | 2 | 3 | 4
+
+function PhaseNav({ day, active, onPick }: { day: TodayDay; active: Tab | null; onPick: (n: Tab) => void }) {
+  const phases: { n: Tab; id: string; title: string; sub: string; stats: { v: number; l: string; tone?: string }[] }[] = [
+    { n: 0, id: 'td-attn', title: 'Chú ý & lịch', sub: 'Cần chú ý và lịch hạn',
+      stats: [] },
     { n: 1, id: 'td-summary', title: 'Summary', sub: 'Hôm qua đã làm gì',
       stats: [{ v: day.yesterday.done.length, l: 'xong', tone: 'ok' }, { v: day.yesterday.open.length, l: 'dở' }, { v: day.yesterday.blockers.length, l: 'vướng', tone: 'bad' }] },
     { n: 2, id: 'td-brainstorm', title: 'Brainstorm', sub: 'Ý và việc muốn làm hôm nay',
-      stats: [{ v: day.ideas.length, l: 'ý' }, { v: day.ideas.filter((x) => x.kind === 'no-task').length, l: 'chưa có task' }] },
+      stats: day.plan.eval ? [{ v: day.ideas.length, l: 'ý của Amin' }] : [{ v: day.ideas.length, l: 'ý' }, { v: day.ideas.filter((x) => x.kind === 'no-task').length, l: 'chưa có task' }] },
     { n: 3, id: 'td-plan', title: 'Plan', sub: 'Kế hoạch theo ngày: việc sẽ làm hôm nay',
       stats: [{ v: day.plan.top.length, l: 'việc hôm nay', tone: 'now' }, { v: day.plan.intoTasks.length, l: 'vào task' }, { v: day.plan.parking.length, l: 'để sau' }] },
     { n: 4, id: 'td-timeline', title: 'Timeline', sub: 'Tổng quan các task còn lại',
       stats: [{ v: day.timeline?.tasks.length ?? 0, l: 'task còn lại' }, { v: day.timeline?.recentlyDone.length ?? 0, l: 'vừa xong', tone: 'ok' }] },
   ]
   return (
-    <nav className="td-phases" aria-label="4 phần của trang: Summary, Brainstorm, Plan, Timeline">
+    <nav className="td-phases" role="tablist" aria-label="Các phần của trang: Chú ý, Summary, Brainstorm, Plan, Timeline">
       {phases.map((p) => (
-        <button key={p.n} type="button" className={`td-phase td-ph${p.n}`} onClick={() => go(p.id)}>
+        <button key={p.n} type="button" role="tab" aria-selected={active === p.n} aria-controls={p.id} className={`td-phase td-ph${p.n}${active === p.n ? ' on' : ''}`} onClick={() => onPick(p.n)}>
           <span className="td-phb">{p.n}</span>
           <span className="td-pht"><b>{p.title}</b><small>{p.sub}</small></span>
           <span className="td-phs">{p.stats.map((x) => <i key={x.l} className={x.tone ? 'f-' + x.tone : ''}><b>{x.v}</b> {x.l}</i>)}</span>
@@ -80,18 +75,59 @@ function PhaseNav({ day }: { day: TodayDay }) {
 }
 
 function Idea({ idea }: { idea: TodayIdea }) {
-  const chip =
-    idea.kind === 'has-task' ? idea.keys.map((k) => <Key key={k} k={k} solid />)
-    : idea.kind === 'no-task' ? <span className="td-chip none">○ chưa có task</span>
-    : <span className="td-chip unv" title="Chưa xác minh">?</span>
+  // Gọn: task id chỉ hiện MỘT lần (chip), không lặp ở topic/tiêu đề; keyword chỉ hiện khi ý chưa gắn task.
+  const hasTask = idea.kind === 'has-task'
+  const strip = (x: string) => x.replace(/^((KAN|GEN)-\d+(\/\S+)?[\s,:·★]*)+/, '').trim()
+  const title = hasTask ? strip(idea.s ?? idea.t) : (idea.s ?? idea.t)
+  const topicIsKey = hasTask && idea.keys.some((k) => idea.topic.includes(k))
   return (
     <li className={`td-idea ${idea.kind}`} title={[idea.t, idea.note].filter(Boolean).join(' — ')}>
-      <div className="td-ihead"><span className="td-topic">{idea.topic}</span><span className="td-chips">{chip}</span></div>
-      <b className="td-ititle">{idea.s ?? idea.t}</b>
+      <div className="td-ihead">
+        {!topicIsKey && <span className="td-topic">{idea.topic}</span>}
+        <span className="td-chips">
+          {hasTask ? idea.keys.map((k) => <Key key={k} k={k} solid />)
+            : idea.kind === 'no-task' ? <span className="td-chip none">○ chưa có task</span>
+            : <span className="td-chip unv" title="Chưa xác minh">?</span>}
+        </span>
+      </div>
+      <b className="td-ititle">{title}</b>
+      {idea.hl && idea.hl.length > 0 && <p className="td-hl">{idea.hl.map((h) => <mark key={h}>{h}</mark>)}</p>}
       {idea.flow && <ol className="td-flow">{idea.flow.map((f, n) => <li key={n}>{f}</li>)}</ol>}
-      {idea.kw && <p className="td-kws">{idea.kw.map((k) => <span key={k}>#{k}</span>)}</p>}
-      {idea.kind !== 'has-task' && idea.keys.length > 0 && <p className="td-rel">{idea.keys.map((k) => <Key key={k} k={k} />)}</p>}
+      {!hasTask && idea.kw && <p className="td-kws">{idea.kw.map((k) => <span key={k}>#{k}</span>)}</p>}
+      {!hasTask && idea.keys.length > 0 && <p className="td-rel">{idea.keys.map((k) => <Key key={k} k={k} />)}</p>}
     </li>
+  )
+}
+
+const VERDICT: Record<PlanEval['verdict'], { l: string; c: string }> = {
+  first: { l: 'Ưu tiên làm trước', c: 'now' }, 'into-task': { l: 'Đưa vào task', c: 'in' }, 'new-task': { l: 'Cần task mới', c: 'new' }, later: { l: 'Để sau', c: 'later' }, done: { l: 'Đã xong / đóng', c: 'done' },
+}
+const TODAY_L: Record<PlanEval['today'], string> = { yes: 'Làm được hôm nay', wait: 'Cần Amin quyết trước', no: 'Không làm hôm nay' }
+
+/** Brainstorm = ghi chú ý của Amin (không hiện task). */
+function Note({ idea }: { idea: TodayIdea }) {
+  return <li className="td-note"><b>{idea.s ?? idea.topic}</b><p>{idea.t}</p></li>
+}
+
+/** Plan = đánh giá từng ý Brainstorm với tình hình task hiện tại. */
+function EvalTable({ ideas, ev }: { ideas: TodayIdea[]; ev: PlanEval[] }) {
+  return (
+    <div className="tbl-wrap">
+      <table className="td-eval">
+        <thead><tr><th>Ý của Amin</th><th>Tình hình task</th><th>Đề xuất</th><th>Hôm nay</th><th>Lý do</th></tr></thead>
+        <tbody>
+          {ev.map((e) => (
+            <tr key={e.idea} className={`v-${VERDICT[e.verdict].c}`}>
+              <td className="te-i"><b>{ideas[e.idea]?.s ?? ''}</b></td>
+              <td className="te-s">{e.key && e.key.split(/,\s*/).map((k) => <Key key={k} k={k} solid />)} <span>{e.state}</span></td>
+              <td><span className={`te-v ${VERDICT[e.verdict].c}`}>{VERDICT[e.verdict].l}</span></td>
+              <td className={`te-t ${e.today}`}><b>{TODAY_L[e.today]}</b>{e.todayNote && <small>{e.todayNote}</small>}</td>
+              <td className="te-w">{e.why}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -103,10 +139,12 @@ export function Today() {
   const days = useMemo(() => [...(TODAY_DAYS as TodayDay[])].sort((a, b) => a.date.localeCompare(b.date)), [])
   // Mặc định luôn là ngày hôm nay; ngày cũ chọn bằng mũi tên hoặc danh sách. Không có file của hôm nay thì báo rõ, không tự nhảy sang ngày cũ.
   const [sel, setSel] = useState(todayIso)
-  const [filter, setFilter] = useState<Filter>('all')
   const day = days.find((d) => d.date === sel)
   const prev = [...days].reverse().find((d) => d.date < sel)
   const next = days.find((d) => d.date > sel)
+  // Mặc định tất cả card đóng; bấm card đang mở thì đóng lại (Amin 24/11).
+  const [tab, setTab] = useState<Tab | null>(null)
+  const pickTab = (n: Tab) => setTab((cur) => (cur === n ? null : n))
   const lsKey = day ? `sh-today-done:${day.date}` : ''
   const [saved, setSaved] = useState<Record<string, number[]>>({})
   const ticks = saved[lsKey] ?? readTicks(lsKey)
@@ -141,8 +179,7 @@ export function Today() {
     )
   }
 
-  const ideas = day.ideas.filter((x) => filter === 'all' || x.kind === filter)
-  const count = (f: Filter) => (f === 'all' ? day.ideas.length : day.ideas.filter((x) => x.kind === f).length)
+  const ideas = day.ideas
   const top = day.plan.top
 
   return (
@@ -152,28 +189,33 @@ export function Today() {
         {nav}
       </header>
       {day.status === 'draft' && <p className="banner"><b>Bản nháp, chưa duyệt.</b> Chỉ hiện ở máy cục bộ; chưa publish.</p>}
-      <PhaseNav day={day} />
+      <PhaseNav day={day} active={tab} onPick={pickTab} />
       <div className="td-grid">
-        <Sec id="td-summary" phase={1} title="Summary · kết quả hôm qua" hint="Việc đã xong, còn dở và đang vướng của ngày hôm trước." className="td-yest">
+        {tab === 0 && <Sec id="td-attn" phase={0} title="Chú ý & lịch" hint="Cần chú ý và lịch hạn từ Bảng điều khiển." className="td-attn">
+          <DashAside />
+        </Sec>}
+        {tab === 1 && <Sec id="td-summary" phase={1} title="Summary · kết quả hôm qua" hint="Việc đã xong, còn dở và đang vướng của ngày hôm trước." className="td-yest">
           <div className="td-cols">
             <Group label="Đã xong" items={day.yesterday.done} tone="ok" />
             <Group label="Dang dở" items={day.yesterday.open} />
             <Group label="Blocker" items={day.yesterday.blockers} tone="bad" />
           </div>
-        </Sec>
-
-        <Sec id="td-brainstorm" phase={2} title="Brainstorm · ý hôm nay" hint="Ý, việc muốn làm; chưa phải cam kết." count={day.ideas.length} className="td-brain">
-          <div className="td-filters" role="group" aria-label="Lọc ý tưởng">
-            {FILTERS.map((f) => (
-              <button key={f.id} className={`td-f${filter === f.id ? ' on' : ''}`} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
-                {f.label} <span>{count(f.id)}</span>
-              </button>
-            ))}
+          <div className="td-cols td-impact">
+            <Group label="Ảnh hưởng tới Plan hôm qua (plan → kết quả)" items={day.yesterday.planImpact ?? []} />
+            <Group label="Ảnh hưởng tới Timeline chung" items={day.yesterday.timelineImpact ?? []} />
           </div>
-          {ideas.length ? <ul className="td-ideas">{ideas.map((x, n) => <Idea key={n} idea={x} />)}</ul> : <p className="note">Không có ý nào trong nhóm này.</p>}
-        </Sec>
+        </Sec>}
 
-        <Sec id="td-plan" phase={3} title="Plan · kế hoạch hôm nay" hint="Kế hoạch theo ngày: các việc sẽ làm / định làm, chốt từ đầu ngày. Tick khi xong." className="td-plan">
+        {tab === 2 && <Sec id="td-brainstorm" phase={2} title="Brainstorm · ý hôm nay" hint={day.plan.eval ? "Ghi chú ý của Amin, nguyên văn ngắn gọn; chưa phải cam kết." : "Ý, việc muốn làm; chưa phải cam kết."} count={day.ideas.length} className="td-brain">
+          {day.plan.eval
+            ? <ul className="td-notes">{day.ideas.map((x, n) => <Note key={n} idea={x} />)}</ul>
+            : <>
+          {ideas.length ? <ul className="td-ideas">{ideas.map((x, n) => <Idea key={n} idea={x} />)}</ul> : <p className="note">Chưa có ý nào.</p>}
+            </>}
+        </Sec>}
+
+        {tab === 3 && <Sec id="td-plan" phase={3} title="Plan · kế hoạch hôm nay" hint="Kế hoạch theo ngày: các việc sẽ làm / định làm, chốt từ đầu ngày. Tick khi xong." className="td-plan">
+          <>
           {day.plan.rhythm && <p className="td-rhythm"><b>Nhịp ngày:</b> {day.plan.rhythm}</p>}
           <div className="td-cols">
             <div className="td-grp">
@@ -202,8 +244,9 @@ export function Today() {
               <ul>{day.plan.parking.map((it, n) => <Row key={n} it={it} />)}</ul>
             </div>
           </div>
-        </Sec>
-        {!day.timeline && day.overview && (
+          </>
+        </Sec>}
+        {tab === 4 && !day.timeline && day.overview && (
           <Sec phase={4} title="Plan chung (cũ)" hint="Dữ liệu ngày cũ, trước khi có Timeline." className="td-plan td-plan-sub">
             <div className="td-cols">
               <Group label="Today Plan" items={day.overview.todayPlan} />
@@ -214,14 +257,14 @@ export function Today() {
             </div>
           </Sec>
         )}
-        {day.timeline && (
+        {tab === 4 && day.timeline && (
           <Sec id="td-timeline" phase={4} title="Timeline · tổng quan các task còn lại" hint="Kế hoạch tổng quan, cập nhật theo ngày: task đang chạy còn lại, việc đã xong và việc còn phải làm." count={day.timeline.tasks.length} className="td-plan td-tl">
             <TimelinePlan tl={day.timeline} />
           </Sec>
         )}
       </div>
       <WorklogCards />
-      <div className="td-grid"><ActiveWork /><AllWorklog /></div>
+      <div className="td-grid"><AllWorklog /></div>
     </>
   )
 }
