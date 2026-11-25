@@ -6,7 +6,6 @@ import type { DashboardData, DashLink, DashTask, DashVerify, DashWidget } from '
 import { Preview } from './TikTok'
 import { FocusTimer } from '../focusTimer'
 
-const WD = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
 const pad = (n: number) => String(n).padStart(2, '0')
 const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }
@@ -467,7 +466,6 @@ export function Dashboard() {
   }, [])
   if (!data) return <p className="note">Đang tải…</p>
 
-  const t = new Date()
   const doing = data.tasks
   const doneDetail = data.done.filter((x) => x.notes || x.progressFile || x.outputs?.length)
   const queued = tab === 'idea' ? data.idea : data.todo

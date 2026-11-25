@@ -6,7 +6,6 @@ type St = 'Còn lại' | 'Đang làm' | 'Chờ' | 'Đã xong'
 export type WlItem = { item_id: string; date: string; session_name: string; section_id: string; section_name: string; action: string; status: St; started_at: string | null; updated_at: string | null; evidence: string[]; verify: string | null; next_or_blocker: string | null }
 
 const CLS: Record<St, string> = { 'Còn lại': 'todo', 'Đang làm': 'doing', 'Chờ': 'wait', 'Đã xong': 'done' }
-const ORDER: St[] = ['Đang làm', 'Chờ', 'Còn lại']
 const hm = (t: string | null) => (t ? t.slice(11, 16) : null)
 const mins = (a: string, b: string) => Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000))
 const dur = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}g${String(m % 60).padStart(2, '0')}` : `${m} phút`)

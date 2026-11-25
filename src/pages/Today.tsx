@@ -4,7 +4,7 @@ import { WorklogCards } from '../components/WorklogPanel'
 import { AllWorklog } from '../components/AllWorklog'
 import { TimelinePlan } from '../components/TimelinePlan'
 import { DashAside } from './Dashboard'
-import type { PlanEval, TodayDay, TodayIdea, TodayItem } from '../data/todayTypes'
+import type { TodayDay, TodayIdea, TodayItem } from '../data/todayTypes'
 
 /** Tab "Hôm nay" (Morning Overview, KAN-117). Dữ liệu: today/YYYY-MM-DD.json ở Drive, nạp qua virtual:working-data. */
 
@@ -99,36 +99,10 @@ function Idea({ idea }: { idea: TodayIdea }) {
   )
 }
 
-const VERDICT: Record<PlanEval['verdict'], { l: string; c: string }> = {
-  first: { l: 'Ưu tiên làm trước', c: 'now' }, 'into-task': { l: 'Đưa vào task', c: 'in' }, 'new-task': { l: 'Cần task mới', c: 'new' }, later: { l: 'Để sau', c: 'later' }, done: { l: 'Đã xong / đóng', c: 'done' },
-}
-const TODAY_L: Record<PlanEval['today'], string> = { yes: 'Làm được hôm nay', wait: 'Cần Amin quyết trước', no: 'Không làm hôm nay' }
 
 /** Brainstorm = ghi chú ý của Amin (không hiện task). */
 function Note({ idea }: { idea: TodayIdea }) {
   return <li className="td-note"><b>{idea.s ?? idea.topic}</b><p>{idea.t}</p></li>
-}
-
-/** Plan = đánh giá từng ý Brainstorm với tình hình task hiện tại. */
-function EvalTable({ ideas, ev }: { ideas: TodayIdea[]; ev: PlanEval[] }) {
-  return (
-    <div className="tbl-wrap">
-      <table className="td-eval">
-        <thead><tr><th>Ý của Amin</th><th>Tình hình task</th><th>Đề xuất</th><th>Hôm nay</th><th>Lý do</th></tr></thead>
-        <tbody>
-          {ev.map((e) => (
-            <tr key={e.idea} className={`v-${VERDICT[e.verdict].c}`}>
-              <td className="te-i"><b>{ideas[e.idea]?.s ?? ''}</b></td>
-              <td className="te-s">{e.key && e.key.split(/,\s*/).map((k) => <Key key={k} k={k} solid />)} <span>{e.state}</span></td>
-              <td><span className={`te-v ${VERDICT[e.verdict].c}`}>{VERDICT[e.verdict].l}</span></td>
-              <td className={`te-t ${e.today}`}><b>{TODAY_L[e.today]}</b>{e.todayNote && <small>{e.todayNote}</small>}</td>
-              <td className="te-w">{e.why}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
 }
 
 const readTicks = (k: string): number[] => {

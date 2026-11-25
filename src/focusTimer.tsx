@@ -213,7 +213,7 @@ export function FocusTimer({ k }: { k: string }) {
 /** Ô nổi ở góc màn hình: hiện mọi đồng hồ đã bắt đầu, tồn tại qua mọi trang cho tới khi bấm ✕. */
 export function FocusDock() {
   const keys = useLiveKeys()
-  const tick = useTick(keys.length > 0)
+  useTick(keys.length > 0)
   const [pop, setPop] = useState<PopupDetail | null>(null)
   useEffect(() => {
     const on = (e: Event) => setPop((e as CustomEvent<PopupDetail>).detail)

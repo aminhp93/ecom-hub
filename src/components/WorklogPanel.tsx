@@ -124,7 +124,7 @@ export function WorklogCards() {
   const all = useFetch<{ items: AllItem[] }>('/worklog/all')
   const d = new Date(); const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const items = all.data?.items ?? []
-  const doneKeys = new Set((DASH_SEED.done ?? []).map((t) => t.key))
+  const doneKeys = new Set((DASH_SEED.done ?? []).map((t: { key: string }) => t.key))
   const title = new Map([...(DASH_SEED.tasks ?? []), ...(DASH_SEED.done ?? [])].map((t) => [t.key, t.t] as const))
   const keys = Array.from(new Set(items.filter((i) => i.date === today).map((i) => i.key)))
   const cards = keys.map((key) => {
