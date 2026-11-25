@@ -9,7 +9,7 @@ import { CreativeRequestForm } from './CreativeRequestForm'
 import { groupCreatives } from '../data/creativeGroups'
 import type { CreativeGroup } from '../data/creativeGroups'
 import { UsedPrompt, UsedInputs } from './UsedAssets'
-import { ConclusionCell, FlowAgentCell, GateCell } from './CreativeEval'
+import { ConclusionCell, FlowAgentCell, GateCell, flowLabel } from './CreativeEval'
 import { ChecklistTable, ChecklistCount } from './ChecklistTable'
 import { checklistView, flowTextFix } from '../data/checklistView'
 
@@ -105,9 +105,10 @@ export function CreativeBoard({ store, onChange }: Props) {
   const groups = groupCreatives(store.creative)
   const gOf = new Map(groups.map((g) => [g.active.id, g]))
   const actives = groups.map((g) => g.active)
-  const drafts = actives.filter((v) => !v.media).length
+  const isDraft = (v: Video) => v.draft ?? !v.media
+  const drafts = actives.filter(isDraft).length
   // Draft (chưa có video) lên đầu, giữ nguyên thứ tự còn lại
-  const shown = [...actives.filter((v) => (filter === 'video' ? !!v.media : filter === 'draft' ? !v.media : true))].sort((a, b) => Number(!!a.media) - Number(!!b.media))
+  const shown = [...actives.filter((v) => (filter === 'video' ? !!v.media : filter === 'draft' ? isDraft(v) : true))].sort((a, b) => Number(!isDraft(a)) - Number(!isDraft(b)))
   const remove = (id: string) => onChange({ ...store, creative: store.creative.filter((x) => x.id !== id) })
 
   return (
@@ -116,7 +117,7 @@ export function CreativeBoard({ store, onChange }: Props) {
       <div className="bar">
         <h2>Creative</h2>
         <span className="sp" />
-        {([['all', `Tất cả ${actives.length}`], ['draft', `Draft ${drafts}`], ['video', `Có video ${actives.length - drafts}`]] as const).map(([k, l]) => (
+        {([['all', `Tất cả ${actives.length}`], ['draft', `Draft ${drafts}`], ['video', `Có video ${actives.filter((v) => !!v.media).length}`]] as const).map(([k, l]) => (
           <button key={k} className={filter === k ? 'btn pri' : 'btn'} aria-pressed={filter === k} onClick={() => setFilter(k)}>{l}</button>
         ))}
         <button className={view === 'card' ? 'btn pri' : 'btn'} aria-pressed={view === 'card'} aria-label="Xem dạng thẻ" title="Dạng thẻ" onClick={() => setView('card')}>▦</button>
@@ -131,20 +132,22 @@ export function CreativeBoard({ store, onChange }: Props) {
                 <div className="vlist-wrap">
                   <table className="vlist">
                     <thead><tr>
-                      <th>ID</th><th>Video</th><th>Angle / hook</th><th>Flow</th><th>Agent gen</th>
+                      <th>ID<span className="gh">kèm agent gen</span></th><th>Video</th><th>Draft</th><th>Angle / hook</th>
+                      <th>Prompt<span className="gh">kèm loại flow</span></th><th>Input<span className="gh">F3: asset đã dùng · F1/F2: ref</span></th>
                       <th colSpan={3}>Checklist<span className="gh">Theo từng flow</span></th>
-                      <th>Kết luận</th><th>Prompt</th><th>Input<span className="gh">F3: asset đã dùng · F1/F2: ref</span></th><th>Social<span className="gh">đã tạo / đã đăng</span></th><th>last_updated</th><th />
+                      <th>Kết luận</th><th>Social<span className="gh">đã tạo / đã đăng</span></th><th>last_updated</th><th />
                     </tr></thead>
                     <tbody>
                       {shown.map((v) => {
                         if (!open.has(v.id)) return <CompactRow key={v.id} store={store} v={v} g={gOf.get(v.id)} onToggle={() => toggle(v.id)} onEdit={() => setEditing(v)} onRemove={() => { if (window.confirm(`Xóa ${v.id}?`)) remove(v.id) }} />
                         return (
                           <tr key={v.id} className="vl-open" id={`row-${v.id}`}>
-                            <td className="vl-id"><button type="button" className="vl-tg open" onClick={() => toggle(v.id)} aria-expanded="true" aria-controls={`row-${v.id}`} aria-label={`Thu gọn chi tiết ${v.id}`} title="Thu gọn chi tiết"><span aria-hidden="true">▾</span></button><b>{v.id}</b></td>
+                            <td className="vl-id"><button type="button" className="vl-tg open" onClick={() => toggle(v.id)} aria-expanded="true" aria-controls={`row-${v.id}`} aria-label={`Thu gọn chi tiết ${v.id}`} title="Thu gọn chi tiết"><span aria-hidden="true">▾</span></button><b>{v.id}</b><div className="vl-ag"><FlowAgentCell v={v} part="agent" /></div></td>
                             <td className="vl-media">{v.media ? mediaList(v.media).map((m) => <Media key={m} src={m} />) : <div className="thumb">Chưa có</div>}</td>
+                            <td className="vl-draft">{isDraft(v) ? <Pill tone="warn">Draft</Pill> : <span className="note">—</span>}</td>
                             <td className="vl-angle"><div className="vl-scroll"><div><b>Angle:</b> {v.angle || '—'}</div><div><b>Hook:</b> {v.hook || '—'}</div><VersionHistory store={store} g={gOf.get(v.id)} /></div></td>
-                            <td className="vl-flow"><div className="vl-cell"><FlowAgentCell v={v} part="flow" /></div></td>
-                            <td className="vl-agent"><div className="vl-cell"><FlowAgentCell v={v} part="agent" /></div></td>
+                            <td className="vl-prompt"><div className="vl-cell"><PromptCell store={store} v={v} /></div></td>
+                            <td className="vl-ref"><div className="vl-cell vl-cell-free">{v.inputs ? <InputList v={v} /> : <UsedInputs store={store} v={v} />}</div></td>
                             {v.flowChecks ? <td className="vl-gate vl-fck" colSpan={3}><div className="vl-cell vl-cell-free"><ChecklistTable v={v} /></div></td> : (
                               <>
                                 <td className="vl-gate"><div className="vl-cell"><span className="gh">Cổng A · Prompt (trước gen)</span><GateCell v={v} k="A" /></div></td>
@@ -153,8 +156,6 @@ export function CreativeBoard({ store, onChange }: Props) {
                               </>
                             )}
                             <td className="vl-ready"><div className="vl-cell"><ConclusionCell store={store} v={v} /></div></td>
-                            <td className="vl-prompt"><div className="vl-cell"><UsedPrompt store={store} v={v} /></div></td>
-                            <td className="vl-ref"><div className="vl-cell vl-cell-free">{v.inputs ? <InputList v={v} /> : <UsedInputs store={store} v={v} />}</div></td>
                             <td className="vl-soc"><SocialCell store={store} v={v} /></td>
                             <td className="vl-upd">{v.last_updated ?? <span className="note">—</span>}</td>
                             <td className="vl-act"><button className="link" onClick={() => setEditing(v)}>Sửa</button><button className="link bad" onClick={() => { if (window.confirm(`Xóa ${v.id}?`)) remove(v.id) }}>Xóa</button></td>
@@ -179,6 +180,7 @@ export function CreativeBoard({ store, onChange }: Props) {
                           <b>{v.id}</b>
                           <Pill tone={v.status === 'Đã qua cổng' ? 'ok' : 'warn'}>{v.status}</Pill>
                           <Pill>Cổng {v.gate}</Pill>
+                          {isDraft(v) && <Pill tone="warn">Draft</Pill>}
                         </div>
                         <FlowGates v={v} />
                         <ConclusionCell store={store} v={v} />
@@ -394,6 +396,17 @@ function InputList({ v }: { v: Video }) {
   )
 }
 
+// Ô Prompt: đầu ô là loại flow dạng "số · tên" (lấy từ dữ liệu flow đang có), dưới là prompt đã dùng.
+function PromptCell({ store, v, compact }: { store: Store; v: Video; compact?: boolean }) {
+  const f = flowLabel(v)
+  return (
+    <div className="pc">
+      <div className="pc-flow">{f ? <span className={`fa-t fa-k${f.k}`} title={[v.flowName, v.flowDesc].filter(Boolean).join('\n')}>{f.t}</span> : <span className="note">Flow: —</span>}</div>
+      <UsedPrompt store={store} v={v} compact={compact} />
+    </div>
+  )
+}
+
 // Hàng gọn: mỗi ô tối đa 1–2 dòng, chỉ tóm tắt; mở hàng để xem đủ.
 function CompactRow({ store, v, g, onToggle, onEdit, onRemove }: { store: Store; v: Video; g?: CreativeGroup; onToggle: () => void; onEdit: () => void; onRemove: () => void }) {
   const ckBad = (checklistView(v)?.groups ?? []).flatMap((g) => g.rows).filter((r) => r.s === 'bad').map((r) => r.label)
@@ -402,17 +415,16 @@ function CompactRow({ store, v, g, onToggle, onEdit, onRemove }: { store: Store;
   const nMedia = v.media ? mediaList(v.media).length : 0
   return (
     <tr className="vl-cz" id={`row-${v.id}`}>
-      <td className="vl-id"><button type="button" className="vl-tg" onClick={onToggle} aria-expanded="false" aria-controls={`row-${v.id}`} aria-label={`Mở chi tiết ${v.id}`} title="Mở chi tiết"><span aria-hidden="true">▸</span></button><b>{v.id}</b>{(g?.history.length ?? 0) + (v.archive?.length ?? 0) ? <span className="arch-b" title="Có version cũ trong Lịch sử phiên bản">+{(g?.history.length ?? 0) + (v.archive?.length ?? 0)} cũ</span> : null}</td>
+      <td className="vl-id"><button type="button" className="vl-tg" onClick={onToggle} aria-expanded="false" aria-controls={`row-${v.id}`} aria-label={`Mở chi tiết ${v.id}`} title="Mở chi tiết"><span aria-hidden="true">▸</span></button><b>{v.id}</b><div className="vl-ag"><FlowAgentCell v={v} part="agent" /></div>{(g?.history.length ?? 0) + (v.archive?.length ?? 0) ? <span className="arch-b" title="Có version cũ trong Lịch sử phiên bản">+{(g?.history.length ?? 0) + (v.archive?.length ?? 0)} cũ</span> : null}</td>
       <td className="vl-media">{nMedia ? <Thumb list={mediaList(v.media!)} /> : <span className="note">Chưa có</span>}</td>
+      <td className="vl-draft">{(v.draft ?? !v.media) ? <Pill tone="warn">Draft</Pill> : <span className="note">—</span>}</td>
       <td className="vl-angle"><div className="cz-clamp">{v.angle || v.hook || v.title || '—'}</div></td>
-      <td className="vl-flow"><FlowAgentCell v={v} part="flow" /></td>
-      <td className="vl-agent"><FlowAgentCell v={v} part="agent" /></td>
+      <td className="vl-prompt"><PromptCell store={store} v={v} compact /></td>
+      <td className="vl-ref">{v.inputs ? <span className="note">{v.inputs.length} input</span> : <UsedInputs store={store} v={v} compact />}</td>
       <td className="vl-gate vl-fck" colSpan={3}>{v.flowChecks ? (
         <div className="cz-ck"><ChecklistCount v={v} />{ckBad.length ? <span className="cz-clamp1 note">Không đạt: {ckBad.slice(0, 3).join(' · ')}</span> : null}</div>
       ) : <span className="note">{v.gates ? 'Cổng A/C/B cũ' : 'Chưa chấm'}</span>}</td>
       <td className="vl-ready"><Pill tone={tone}>{label}</Pill>{v.verdict?.gen ? <span className="note cz-gen">Gen: {v.verdict.gen}</span> : null}</td>
-      <td className="vl-prompt"><UsedPrompt store={store} v={v} compact /></td>
-      <td className="vl-ref">{v.inputs ? <span className="note">{v.inputs.length} input</span> : <UsedInputs store={store} v={v} compact />}</td>
       <td className="vl-soc"><SocialCell store={store} v={v} /></td>
       <td className="vl-upd">{v.last_updated ?? <span className="note">—</span>}</td>
       <td className="vl-act"><button className="link" onClick={onEdit}>Sửa</button><button className="link bad" onClick={onRemove}>Xóa</button></td>

@@ -96,6 +96,8 @@ export interface Video {
   gateChecks?: Partial<Record<GateKey, Array<{ k: string; t?: string; s: 'ok' | 'bad' | 'unk' | 'na'; n?: string }>>>
   gates?: Partial<Record<GateKey, GateState>>
   // Checklist riêng theo flow (KAN-120/P15, từ F3): 4 nhóm, mức M/C/O, chỉ tiêu chí M hoặc C đang bật quyết định kết luận. Có thì bảng Creative dùng thay cho cổng A/C/B; gateChecks/gates cũ giữ để tương thích.
+  // Cột Draft (Amin 25/11/2026): true = bản nháp chưa chốt/chưa gen; bỏ trường này thì suy từ việc chưa có video
+  draft?: boolean
   flowChecks?: { schema: string; source?: string; groups: Array<{ id: string; name: string; items: Array<{ k: string; t: string; tier: 'M' | 'C' | 'O'; s: 'ok' | 'bad' | 'unk' | 'na'; n?: string; cond?: string; ft?: 'Chặn' | 'Hậu kỳ'; stage?: 'G' | 'P' }> }>; flow?: string; gateGen?: string }
   brief?: { goal: string; channel?: string; duration?: string; cta?: boolean; text?: boolean; voice?: boolean; music?: boolean; ai?: boolean; source?: string }
   // Flow 3: tài nguyên đầu vào thực sự đã dùng (cột Input). Không có file/bằng chứng thì để path rỗng, UI ghi "Chưa có bằng chứng".

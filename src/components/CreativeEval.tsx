@@ -16,6 +16,9 @@ export function AgentCell({ v }: { v: Video }) {
   return v.agent ? <Pill tone="idle">{v.agent}</Pill> : <span className="note">—</span>
 }
 
+/** Nhãn flow ngắn "1 · Gen từ brief" cho đầu ô Prompt (KAN-132/P8). */
+export const flowLabel = (v: Video): { k: '1' | '2' | '3'; t: string } | null => { const g = genKind(v); return g ? { k: g.k, t: `${g.k} · ${g.k === '1' ? 'Gen từ brief' : g.k === '2' ? 'Gen theo cấu trúc ref' : 'Dựng từ footage'}` } : null }
+
 // Cột gọn "Flow · Agent": công cụ gen (Muse/Flow) + kiểu gen (Flow 1/2/3), có màu để phân biệt. Chi tiết ở tooltip.
 const genKind = (v: Video): { k: '1' | '2' | '3'; t: string } | null => {
   const n = `${v.flowName ?? ''} ${v.flowNote ?? ''}`.toLowerCase()

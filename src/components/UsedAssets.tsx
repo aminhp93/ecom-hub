@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Store, Video } from '../data/types'
+import { Modal } from './Modal'
+import { Markdown } from './Markdown'
 
 /**
  * KAN-129/UI-CREATIVE: Prompt thực tế + Input thực tế của MỘT version (dùng cho version active, và cho từng bản trong Lịch sử phiên bản).
@@ -17,43 +19,68 @@ const readText = (p: string) => once('tx:' + p, async () => { try { const r = aw
 const kind = (p: string) => /\.(png|jpe?g|gif|webp)$/i.test(p) ? 'image' : /\.(mp4|mov|webm)$/i.test(p) ? 'video' : /\.(mp3|wav|m4a|aac)$/i.test(p) ? 'audio' : 'text'
 const role = (n: string) => /REJECTED|LOAI|loai/.test(n) ? 'Bản bị loại (không dùng)' : /anchor/i.test(n) ? 'Ảnh neo' : /EDL/i.test(n) ? 'Danh sách cắt ghép (EDL)' : /ffmpeg/i.test(n) ? 'Lệnh dựng (ffmpeg)' : /^brief/i.test(n) ? 'Brief' : /prompts?/i.test(n) ? 'Prompt đã dùng' : /ref-structure/i.test(n) ? 'Cấu trúc ref' : /audio|music|nhac|sfx/i.test(n) ? 'Âm thanh' : /clip/i.test(n) ? 'Clip nguồn' : 'File bổ sung'
 
-/** Phần prompt đã chấp nhận/dùng trong bản cuối: bỏ các đoạn có LOẠI / REJECTED; chỉ lấy tiêu đề CHẤP NHẬN hoặc "dùng trong bản cuối" hoặc "Dựng bản cuối". */
+/** Phần prompt đã chấp nhận/dùng trong bản cuối: bỏ các đoạn có LOẠI / REJECTED; chỉ lấy tiêu đề CHẤP NHẬN hoặc "dùng trong bản cuối" hoặc "Dựng bản cuối".
+ *  KAN-132/P8: file không có tiêu đề đánh dấu thì trả TOÀN BỘ file (trước đây chỉ trả phần đầu trước "##" nên prompt bị cụt). */
 export function usedPromptText(md: string): { text: string; marked: boolean } {
   const parts = md.split(/\n(?=#{2,3} )/)
-  const head = parts[0].startsWith('#') && !/^#{2,3} /.test(parts[0]) ? parts.shift()! : ''
+  if (parts[0].startsWith('#') && !/^#{2,3} /.test(parts[0])) parts.shift()
   const keep = parts.filter((s) => { const h = s.split('\n')[0]; return /CHẤP NHẬN|dùng trong bản cuối|Dựng bản cuối/i.test(h) && !/LOẠI|REJECTED/i.test(h) })
-  return keep.length ? { text: keep.join('\n\n').trim(), marked: true } : { text: head, marked: false }
+  return keep.length ? { text: keep.join('\n\n').trim(), marked: true } : { text: md.trim(), marked: false }
 }
 
+const PROMPT_RE = /(^|\/)prompts?(-[^/]*)?\.(md|txt)$/i
+type PF = { file: string; md: string }
 export function usePrompts(store: Store, v: Video) {
-  const [st, setSt] = useState<{ md: string | null; file: string } | undefined>()
+  const [st, setSt] = useState<{ items: PF[] } | undefined>()
   useEffect(() => {
     let off = false
     void (async () => {
       const fs = await listDir(dirOf(store, v))
-      const f = fs.find((x) => /(^|\/)prompts?(-[^/]*)?\.md$/i.test(x.path))
-      const md = f ? await readText(f.path) : null
-      if (!off) setSt({ md, file: f?.path ?? '' })
+      const fl = fs.filter((x) => PROMPT_RE.test(x.path) && !/REJECTED/i.test(x.path)).sort((a, b) => a.path.localeCompare(b.path))
+      const items = (await Promise.all(fl.map(async (f) => ({ file: f.path, md: await readText(f.path) })))).filter((x): x is PF => !!x.md)
+      if (!off) setSt({ items })
     })()
     return () => { off = true }
   }, [store.id, v.id])
   return st
 }
 
+/** Ghép nhiều file prompt (md/txt) thành một văn bản markdown: .txt đặt trong khối code, nhiều file có tiêu đề theo tên file. */
+function joinPrompts(items: PF[]): { text: string; marked: boolean } {
+  const multi = items.length > 1
+  const rs = items.map((it) => {
+    const name = it.file.split('/').pop() ?? it.file
+    const isTxt = /\.txt$/i.test(name)
+    const u = isTxt ? { text: it.md.trim(), marked: false } : usedPromptText(it.md)
+    const body = isTxt ? '```\n' + u.text + '\n```' : u.text
+    return { text: multi ? `## ${name}\n\n${body}` : body, marked: u.marked }
+  })
+  return { text: rs.map((r) => r.text).join('\n\n'), marked: rs.some((r) => r.marked) }
+}
+const LONG = 600
+
 export function UsedPrompt({ store, v, compact }: { store: Store; v: Video; compact?: boolean }) {
   const st = usePrompts(store, v)
   const [copied, setCopied] = useState(false)
+  const [open, setOpen] = useState(false)
   if (!st) return <span className="note">…</span>
-  if (!st.md) return <span className="note up-none">Không có prompt thực tế đã lưu</span>
-  const u = usedPromptText(st.md)
+  if (!st.items.length) return <span className="note up-none">Không có prompt thực tế đã lưu</span>
+  const u = joinPrompts(st.items)
+  const long = u.text.length > LONG
   const copy = async () => { try { await navigator.clipboard.writeText(u.text); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { window.prompt('Copy prompt:', u.text) } }
-  const one = u.text.replace(/\s+/g, ' ')
+  const one = u.text.replace(/```|[#*`|>]/g, '').replace(/\s+/g, ' ').trim()
+  const cut = compact ? 110 : 220
   return (
     <div className="up">
-      <div className="note up-sum">{one.slice(0, compact ? 110 : 220)}{one.length > (compact ? 110 : 220) ? '…' : ''}</div>
-      {!u.marked ? <div className="note"><b>Chưa đánh dấu bản chấp nhận</b> trong file; mở file gốc để xem.</div> : null}
-      <details className="up-full"><summary>Xem toàn bộ prompt đã dùng</summary><pre className="note pre">{u.text}</pre></details>
-      <div className="note"><button type="button" className="link" onClick={copy}>{copied ? 'Đã copy ✓' : 'Copy prompt'}</button> · <a href={`/preview/${enc(st.file)}`} target="_blank" rel="noreferrer">{st.file.split('/').pop()}</a></div>
+      {long || compact ? <div className="note up-sum">{one.slice(0, cut)}{one.length > cut ? '…' : ''}</div> : <div className="up-inline"><Markdown text={u.text} /></div>}
+      {!u.marked && !st.items.every((x) => /\.txt$/i.test(x.file)) ? <div className="note"><b>Chưa đánh dấu bản chấp nhận</b> trong file; hiện toàn bộ file.</div> : null}
+      <div className="note"><button type="button" className="link" onClick={() => setOpen(true)}>{long ? `Xem toàn bộ prompt đã dùng (${u.text.length.toLocaleString('vi-VN')} ký tự)` : 'Xem toàn bộ prompt đã dùng'}</button> · <button type="button" className="link" onClick={copy}>{copied ? 'Đã copy ✓' : 'Copy prompt'}</button>{st.items.map((x) => <span key={x.file}> · <a href={`/preview/${enc(x.file)}`} target="_blank" rel="noreferrer">{x.file.split('/').pop()}</a></span>)}</div>
+      {open && (
+        <Modal title={`Prompt đã dùng · ${v.id}`} wide onClose={() => setOpen(false)}>
+          <div className="md-modal"><Markdown text={u.text} /></div>
+          <div className="actions"><button className="btn pri" onClick={copy}>{copied ? 'Đã copy ✓' : 'Copy prompt'}</button><button className="btn" onClick={() => setOpen(false)}>Đóng (Esc)</button></div>
+        </Modal>
+      )}
     </div>
   )
 }

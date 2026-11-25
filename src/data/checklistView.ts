@@ -77,7 +77,7 @@ export function plainLabel(t: string): string {
 export const F3_LABEL = 'Dựng từ footage nguồn/đối thủ đã lưu'
 export const flowTextFix = (s: string) => s.replace(/dựng\/cắt ghép từ clip tự gen/gi, 'dựng từ footage nguồn/đối thủ đã lưu').replace(/Dựng từ footage có quyền/g, F3_LABEL)
 
-export interface CkRow { k: string; label: string; s: CkStatus; why: string; src: string; full: string; tip: string }
+export interface CkRow { k: string; label: string; s: CkStatus; why: string; src: string; full: string; tip: string; tier: 'M' | 'C' | 'O'; cond?: string; ft?: 'Chặn' | 'Hậu kỳ'; stage?: 'G' | 'P' }
 export interface CkView { counts: Record<CkStatus, number>; total: number; groups: { id: CkGroupId; name: string; rows: CkRow[] }[] }
 
 const short = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t)
@@ -101,7 +101,7 @@ export function checklistView(v: Video): CkView | null {
     const gid = groupOf(i.k)
     const tip = `Mã ${i.k} · ${i.tier === 'M' ? 'bắt buộc' : i.tier === 'C' ? 'có điều kiện' : 'tùy chọn'}${i.stage ? ` · cổng ${i.stage === 'G' ? 'sẵn sàng gen' : 'sẵn sàng đăng'}` : ''}${i.ft ? ` · lỗi ${i.ft}` : ''}`
     if (!buckets.has(gid)) buckets.set(gid, [])
-    buckets.get(gid)!.push({ k: i.k, label: plainLabel(i.t), s: i.s, why: why || '—', src, full: i.n ?? '', tip })
+    buckets.get(gid)!.push({ k: i.k, label: plainLabel(i.t), s: i.s, why: why || '—', src, full: i.n ?? '', tip, tier: i.tier, cond: i.cond, ft: i.ft, stage: i.stage })
   }
   return { counts, total: counts.ok + counts.bad + counts.unk + counts.na, groups: CK_GROUPS.filter((g) => buckets.has(g.id)).map((g) => ({ id: g.id, name: g.name, rows: buckets.get(g.id)! })) }
 }
