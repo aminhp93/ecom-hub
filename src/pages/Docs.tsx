@@ -206,7 +206,7 @@ function DayWork() {
           <div className="dc-card"><b>Cha ghi file</b><span>manifest, TIEU-CHI, TOM-TAT, DANH-GIA, ban-giao. Đổi Jira chỉ khi Amin bảo.</span></div>
         </Tier>
         <Tier title="Tầng 3: Session con KAN-xxx/P1, P2… (phiên làm thật)" sub="Một section, một item_id; ghi worklog + notebook + summary rồi báo cha.">
-          <div className="dc-card"><b>Skill theo loại việc</b><span><Cm t="/dropship-video-flow" /> <Cm t="/dropship-creative" /> <Cm t="/store-6-videos" /> <Cm t="/dropship-research" /> <Cm t="/dropship-run" /> <Cm t="/video-from-script" /> <Cm t="/tiktok-edit" /> <Cm t="/build-web" /></span></div>
+          <div className="dc-card"><b>Skill theo loại việc</b><span><Cm t="/gen-1-video" /> <Cm t="/gen-bo-3-video" /> <Cm t="/gen-video-tu-ref" /> <Cm t="/dropship-creative" /> <Cm t="/store-6-videos" /> <Cm t="/dropship-research" /> <Cm t="/dropship-run" /> <Cm t="/video-from-script" /> <Cm t="/tiktok-edit" /> <Cm t="/build-web" /></span></div>
           <div className="dc-card"><b>Script ghi sổ</b><span><Cm t="worklog.py add --event start" k="w" /> <Cm t="worklog.py add --event update" k="w" /> <Cm t="worklog.py add --event end" k="w" /></span></div>
           <div className="dc-card"><b>Kiểm tra (code, web)</b><span><Cm t="/code-review" k="g" /> <Cm t="/simplify" k="g" /> <Cm t="/run" k="g" /> Verify output do con khác làm, không tự chấm.</span></div>
         </Tier>

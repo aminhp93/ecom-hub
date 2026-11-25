@@ -11,10 +11,10 @@ const FLOWS: Record<FlowKey, { name: string; desc: string; input: string; auto: 
   F3: { name: 'Dựng từ footage nguồn/đối thủ đã lưu', desc: 'Footage đã lưu (kho refs/doi-thu, quay thật, NCC, clip đã gen); quyền sử dụng footage kiểm riêng', input: 'Footage', auto: 'Agent tự tìm footage có quyền', manual: 'Tôi cung cấp footage', ph: 'Đường dẫn clip có quyền, mỗi dòng 1 file + nguồn/quyền' },
 }
 // Tạo bằng lệnh Claude Code (KAN-132/P14): 3 skill, tên store tự điền theo store đang xem.
-const COMMANDS: { cmd: string; desc: string }[] = [
-  { cmd: '/store-3-videos', desc: 'Làm đủ bộ 3 video (gen từ brief, theo cấu trúc ref, cắt ghép)' },
-  { cmd: '/dropship-video-flow', desc: 'Làm 1 video lẻ theo Flow A hoặc Flow B' },
-  { cmd: '/video-tu-ref', desc: 'Có 1 video ref, cần 2 bản: Cắt ghép và Gen lại (đính kèm video khi gõ lệnh)' },
+const COMMANDS: { cmd: string; desc: string; suffix?: string }[] = [
+  { cmd: '/gen-bo-3-video', desc: 'Gen đủ bộ 3 video (Flow 1, 2, 3) cho một store.' },
+  { cmd: '/gen-1-video', desc: 'Gen một video theo Flow bạn chọn (1 từ brief, 2 theo ad đối thủ, 3 cắt ghép).', suffix: ' <1|2|3>' },
+  { cmd: '/gen-video-tu-ref', desc: 'Có một video ref? Làm hai bản: Cắt ghép và Gen lại.' },
 ]
 const AGENTS: Record<string, string[]> = {
   Muse: ['Muse Video'],
@@ -76,8 +76,8 @@ export function CreativeRequestForm({ store, onCreate }: { store: Store; onCreat
       <div className="crf-cmd" role="group" aria-label="Tạo bằng lệnh">
         <h4>Tạo bằng lệnh</h4>
         <p className="note">Dán vào Claude Code; tên store đã điền theo store đang xem ({store.id}).</p>
-        {COMMANDS.map(({ cmd, desc }) => {
-          const full = `${cmd} ${store.id}`
+        {COMMANDS.map(({ cmd, desc, suffix }) => {
+          const full = `${cmd} ${store.id}${suffix ?? ''}`
           return (
             <div key={cmd} className="crf-cmd-row">
               <code>{full}</code>
