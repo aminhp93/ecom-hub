@@ -3,6 +3,7 @@ import { RESEARCH } from '../data/research'
 import { Pill } from './ui'
 import { CriteriaTables } from './CriteriaTables'
 import { StatusSummary } from './StatusSummary'
+import { VideoRefLibrary } from './VideoRefLibrary'
 
 const TONE = { 'nguồn': 'ok', 'suy luận': 'warn', 'chưa có': 'bad' } as const
 
@@ -18,6 +19,8 @@ export function ResearchTab({ store }: { store: Store }) {
   return (
     <>
       <StatusSummary store={store} />
+
+      <VideoRefLibrary store={store} />
 
       <div className="card stack">
         <h2>Chân dung khách hàng</h2>
