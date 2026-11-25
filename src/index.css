@@ -1446,3 +1446,9 @@ ol.td-top li.on .td-tick input { accent-color: var(--ok); }
 .md pre.md-code code { background: none; padding: 0; }
 .md .md-tw { overflow-x: auto; margin: 8px 0; } .md table { border-collapse: collapse; font-size: .95em; } .md th, .md td { border: 1px solid var(--line); padding: 4px 8px; vertical-align: top; text-align: left; } .md th { background: var(--soft); }
 .md-modal { max-height: 68vh; overflow: auto; padding-right: 4px; }
+/* Tạo bằng lệnh (KAN-132/P14) */
+.crf-cmd { display: grid; gap: 6px; margin: 4px 0 10px; }
+.crf-cmd h4 { margin: 0; font-size: calc(13px * var(--fs)); }
+.crf-cmd-row { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.crf-cmd-row code { font-size: calc(12px * var(--fs)); background: var(--soft); padding: 2px 6px; border-radius: 4px; white-space: nowrap; overflow-x: auto; max-width: 100%; }
+@media (max-width: 640px) { .crf-cmd-row { grid-template-columns: 1fr; } }

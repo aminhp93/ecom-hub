@@ -10,6 +10,12 @@ const FLOWS: Record<FlowKey, { name: string; desc: string; input: string; auto: 
   F2: { name: 'Gen theo cấu trúc video tham chiếu', desc: 'Rút cấu trúc từ ref rồi gen mới cho sản phẩm mình', input: 'Video tham chiếu', auto: 'Agent tự đề xuất ref (kho refs/doi-thu)', manual: 'Tôi cung cấp ref', ph: 'ID Meta Ad Library, link hoặc đường dẫn video ref, mỗi dòng 1 cái' },
   F3: { name: 'Dựng từ footage nguồn/đối thủ đã lưu', desc: 'Footage đã lưu (kho refs/doi-thu, quay thật, NCC, clip đã gen); quyền sử dụng footage kiểm riêng', input: 'Footage', auto: 'Agent tự tìm footage có quyền', manual: 'Tôi cung cấp footage', ph: 'Đường dẫn clip có quyền, mỗi dòng 1 file + nguồn/quyền' },
 }
+// Tạo bằng lệnh Claude Code (KAN-132/P14): 3 skill, tên store tự điền theo store đang xem.
+const COMMANDS: { cmd: string; desc: string }[] = [
+  { cmd: '/store-3-videos', desc: 'Làm đủ bộ 3 video (gen từ brief, theo cấu trúc ref, cắt ghép)' },
+  { cmd: '/dropship-video-flow', desc: 'Làm 1 video lẻ theo Flow A hoặc Flow B' },
+  { cmd: '/video-tu-ref', desc: 'Có 1 video ref, cần 2 bản: Cắt ghép và Gen lại (đính kèm video khi gõ lệnh)' },
+]
 const AGENTS: Record<string, string[]> = {
   Muse: ['Muse Video'],
   Flow: ['Omni 1.2 Flash', 'Nano Banana (ảnh)'],
@@ -17,7 +23,8 @@ const AGENTS: Record<string, string[]> = {
 }
 
 export function CreativeRequestForm({ store, onCreate }: { store: Store; onCreate: (v: Video) => void }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState('')
   const [flow, setFlow] = useState<FlowKey>('F1')
   const [agent, setAgent] = useState('Muse')
   const [model, setModel] = useState(AGENTS.Muse[0])
@@ -31,6 +38,14 @@ export function CreativeRequestForm({ store, onCreate }: { store: Store; onCreat
   const [opt, setOpt] = useState({ cta: true, text: true, voice: false, music: false, ai: false })
   const [done, setDone] = useState('')
   const f = FLOWS[flow]
+  const copyCmd = async (text: string) => {
+    try { await navigator.clipboard.writeText(text) } catch {
+      const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select()
+      try { document.execCommand('copy') } catch { /* bỏ qua */ }
+      document.body.removeChild(t)
+    }
+    setCopied(text); setTimeout(() => setCopied((c) => (c === text ? '' : c)), 1500)
+  }
   const pickAgent = (a: string) => { setAgent(a); setModel(AGENTS[a][0]) }
   const reset = () => { setRefs(''); setStructure(''); setAngle(''); setMode('auto'); setDone('') }
   const create = () => {
@@ -56,7 +71,21 @@ export function CreativeRequestForm({ store, onCreate }: { store: Store; onCreat
         <h3 id="crf-h">Tạo creative mới</h3>
         <span className="pill warn">Placeholder · chưa nối agent</span>
         <span className="sp" />
-        <button className="btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{open ? 'Thu gọn' : 'Mở form'}</button>
+        <button className="btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{open ? 'Thu gọn form nhập tay' : 'Mở form nhập tay'}</button>
+      </div>
+      <div className="crf-cmd" role="group" aria-label="Tạo bằng lệnh">
+        <h4>Tạo bằng lệnh</h4>
+        <p className="note">Dán vào Claude Code; tên store đã điền theo store đang xem ({store.id}).</p>
+        {COMMANDS.map(({ cmd, desc }) => {
+          const full = `${cmd} ${store.id}`
+          return (
+            <div key={cmd} className="crf-cmd-row">
+              <code>{full}</code>
+              <span className="note">{desc}</span>
+              <button className="btn" onClick={() => copyCmd(full)} aria-label={`Copy lệnh ${full}`}>{copied === full ? 'Đã copy' : 'Copy lệnh'}</button>
+            </div>
+          )
+        })}
       </div>
       {open && (
         <div className="crf-grid">
