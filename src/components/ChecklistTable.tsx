@@ -75,7 +75,7 @@ function Detail({ v, r, flowSrc, groupName, onClose }: { v: Video; r: CkRow; flo
   const parts = r.full.split(' · ')
   const md = [
     '## Tiêu chí',
-    `- **Mã và tên:** \`${r.k}\` · ${r.label}`,
+    `- **Tên tiêu chí:** ${r.label} (mã \`${r.k}\`)`,
     `- **Mức:** ${TIER[r.tier]}${r.cond ? ` (điều kiện: ${r.cond})` : ''}`,
     `- **Thuộc cổng:** ${r.stage === 'G' ? 'G · Sẵn sàng gen (kiểm trước khi gen)' : r.stage === 'P' ? 'P · Sẵn sàng đăng (kiểm trên video đã gen)' : 'dữ liệu chưa ghi cổng'} · nhóm ${groupName}`,
     def === undefined ? '- **Định nghĩa / cách kiểm:** đang đọc file template…' : def && def.length ? def.map((d) => `- **${d.col === 'Tiêu chí' ? 'Định nghĩa trong template' : d.col}:** ${d.val}`).join('\n') : '- **Định nghĩa / cách kiểm:** chưa có định nghĩa chi tiết trong file template.',
@@ -97,7 +97,7 @@ function Detail({ v, r, flowSrc, groupName, onClose }: { v: Video; r: CkRow; flo
   return (
     <Modal title={`${r.k} · ${r.label}`} onClose={onClose} wide>
       <Markdown text={md} />
-      {imgs.length > 0 && <div className="ckt-imgs">{imgs.slice(0, 4).map((p) => <a key={p} href={`/preview/${enc(p)}`} target="_blank" rel="noreferrer"><img src={`/preview/${enc(p)}`} alt={`Bằng chứng ${p.split('/').pop()}`} loading="lazy" /></a>)}</div>}
+      {imgs.length > 0 && <div className="ckt-imgs">{imgs.slice(0, 4).map((p) => <a key={p} href={`/preview/${enc(p)}`} target="_blank" rel="noreferrer"><img src={`/preview/${enc(p)}`} alt={`Bằng chứng ${p.split('/').pop()}`} loading="lazy" onError={(e) => { const a = e.currentTarget.parentElement; if (a) a.style.display = 'none' }} /></a>)}</div>}
       <div className="rowact"><button type="button" className="btn" onClick={onClose}>Đóng</button></div>
     </Modal>
   )

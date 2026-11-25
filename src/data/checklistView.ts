@@ -21,7 +21,7 @@ const groupOf = (k: string): CkGroupId => (k[0] === 'N' ? 'input' : k[0] === 'D'
 const PLAIN: Record<string, string> = {
   'Dòng brief đủ': 'Brief đầy đủ',
   'Nguồn clip': 'Dựng từ footage nguồn/đối thủ đã lưu',
-  'Nguồn clip trong EDL': 'Dựng từ footage nguồn/đối thủ đã lưu (có trong EDL)',
+  'Nguồn clip trong bảng cắt ghép': 'Dựng từ footage nguồn/đối thủ đã lưu (có trong bảng cắt ghép)',
   'Clip đúng đoạn': 'Đoạn clip được chọn đúng vai',
   'Clip đúng đoạn Hook → Value → CTA': 'Đoạn clip được chọn đúng vai (Hook → Value → CTA)',
   'Không chữ/logo bên thứ ba': 'Không có chữ/logo của bên thứ ba',
@@ -54,7 +54,7 @@ const PLAIN: Record<string, string> = {
   'Không sao chép ref': 'Không sao chép nguyên video tham chiếu',
   'CTA cuối': 'CTA cuối video',
   'Thứ tự Hook→Value→CTA': 'Thứ tự Hook → Value → CTA',
-  'Thứ tự khớp EDL': 'Thứ tự cảnh khớp EDL',
+  'Thứ tự khớp EDL': 'Thứ tự cảnh khớp bảng cắt ghép',
   'Chữ đọc được': 'Chữ đọc được',
   'Chữ đọc được, đúng mốc': 'Chữ đọc được, đúng mốc',
   'Voice': 'Voice (lời dẫn)',

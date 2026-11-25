@@ -17,7 +17,7 @@ const listDir = (d: string) => once('ls:' + d, async () => { try { const r = awa
 const readText = (p: string) => once('tx:' + p, async () => { try { const r = await fetch(`/preview/${enc(p)}`); return r.ok ? await r.text() : null } catch { return null } })
 
 const kind = (p: string) => /\.(png|jpe?g|gif|webp)$/i.test(p) ? 'image' : /\.(mp4|mov|webm)$/i.test(p) ? 'video' : /\.(mp3|wav|m4a|aac)$/i.test(p) ? 'audio' : 'text'
-const role = (n: string) => /REJECTED|LOAI|loai/.test(n) ? 'Bản bị loại (không dùng)' : /anchor/i.test(n) ? 'Ảnh neo' : /EDL/i.test(n) ? 'Danh sách cắt ghép (EDL)' : /ffmpeg/i.test(n) ? 'Lệnh dựng (ffmpeg)' : /^brief/i.test(n) ? 'Brief' : /prompts?/i.test(n) ? 'Prompt đã dùng' : /ref-structure/i.test(n) ? 'Cấu trúc ref' : /audio|music|nhac|sfx/i.test(n) ? 'Âm thanh' : /clip/i.test(n) ? 'Clip nguồn' : 'File bổ sung'
+const role = (n: string) => /REJECTED|LOAI|loai/.test(n) ? 'Bản bị loại (không dùng)' : /anchor/i.test(n) ? 'Ảnh neo' : /EDL/i.test(n) ? 'Bảng cắt ghép (danh sách cảnh cắt từ video nguồn)' : /ffmpeg/i.test(n) ? 'Lệnh dựng (ffmpeg)' : /^brief/i.test(n) ? 'Brief' : /prompts?/i.test(n) ? 'Prompt đã dùng' : /ref-structure/i.test(n) ? 'Cấu trúc ref' : /audio|music|nhac|sfx/i.test(n) ? 'Âm thanh' : /clip/i.test(n) ? 'Clip nguồn' : 'File bổ sung'
 
 /** Phần prompt đã chấp nhận/dùng trong bản cuối: bỏ các đoạn có LOẠI / REJECTED; chỉ lấy tiêu đề CHẤP NHẬN hoặc "dùng trong bản cuối" hoặc "Dựng bản cuối".
  *  KAN-132/P8: file không có tiêu đề đánh dấu thì trả TOÀN BỘ file (trước đây chỉ trả phần đầu trước "##" nên prompt bị cụt). */
@@ -107,7 +107,7 @@ export function UsedInputs({ store, v, compact }: { store: Store; v: Video; comp
   const cited = [...new Set((md.match(/1-dropship\/[^\s"'`)]+?\.(?:png|jpe?g|webp|mp4|mov|mp3|wav|m4a)/gi) ?? []))].filter((p) => !own.some((o) => o.path === p) && !kit.some(([k]) => k === p))
   const items: { path: string; role: string; ok: boolean }[] = [
     ...own.map((f) => ({ path: f.path, role: role(f.path.split('/').pop() ?? ''), ok: true })),
-    ...cited.map((p) => ({ path: p, role: /doi-thu/i.test(p) && /\.(mp4|mov)$/i.test(p) ? 'Footage nguồn (video đối thủ, theo EDL/ffmpeg)' : /\.(mp4|mov)$/i.test(p) ? 'Video reference' : /higgsfield-input|product/i.test(p) ? 'Ảnh sản phẩm thật' : 'Tham chiếu nêu trong prompt', ok: true })),
+    ...cited.map((p) => ({ path: p, role: /doi-thu/i.test(p) && /\.(mp4|mov)$/i.test(p) ? 'Footage nguồn (video đối thủ, theo bảng cắt ghép / lệnh dựng)' : /\.(mp4|mov)$/i.test(p) ? 'Video reference' : /higgsfield-input|product/i.test(p) ? 'Ảnh sản phẩm thật' : 'Tham chiếu nêu trong prompt', ok: true })),
     ...kit.map(([p, r]) => ({ path: p, role: r, ok: !!md && md.includes((p.split('/').pop() ?? '').replace(/\.[^.]+$/, '')) })),
   ]
   const shown = compact ? items.slice(0, 0) : items
