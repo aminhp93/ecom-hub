@@ -188,6 +188,7 @@ export function CreativeBoard({ store, onChange }: Props) {
                         <div>{v.title}</div>
                         {v.last_updated && <div className="note full"><b>last_updated:</b> {v.last_updated}</div>}
                         {v.format && <div className="note full"><b>Format:</b> {v.format}</div>}
+                        {v.cost && <CostLine v={v} full />}
                         {v.hook && <div className="note full"><b>Hook:</b> {v.hook}</div>}
                         {v.step && <p className="note full"><b>Bước hiện tại:</b> {v.step}</p>}
                         {v.note && <p className="note pre full">{v.note}</p>}
@@ -246,13 +247,21 @@ function VideoForm({ video, onSave, onDelete, onClose }: { video?: Video; onSave
   const [gA, setGA] = useState<GateState>(video?.gates?.A ?? 'Chưa review')
   const [gC, setGC] = useState<GateState>(video?.gates?.C ?? 'Chưa review')
   const [gB, setGB] = useState<GateState>(video?.gates?.B ?? 'Chưa review')
+  const [costTokens, setCostTokens] = useState(video?.cost?.tokens ?? '')
+  const [costLeft, setCostLeft] = useState(video?.cost?.tokensLeft ?? '')
+  const [costA, setCostA] = useState(video?.cost?.attempts.anchor ?? 0)
+  const [costC1, setCostC1] = useState(video?.cost?.attempts.clip1 ?? 0)
+  const [costC2, setCostC2] = useState(video?.cost?.attempts.clip2 ?? 0)
+  const [costNote, setCostNote] = useState(video?.cost?.note ?? '')
 
   const save = () => {
     if (!id.trim()) return
     const fields = { mode, hook, setting, product, avatar, duration, resolution, aspect, audio }
     const config = [mode && `Mode ${mode}`, hook && `Hook ${hook}`, setting && `Setting ${setting}`, product && `Product ${product}`, avatar && `Avatar ${avatar}`, resolution, duration, aspect, `Audio ${audio.toLowerCase()}`].filter(Boolean).join(' · ')
     const kit = { ...video?.kit, tool, config, fields, prompt, referenceVideo: lines(refVideo), product: lines(refImg) }
-    onSave({ gate: 'C', status: 'Chưa qua cổng', ...video, last_updated: new Date().toISOString().slice(0, 10), id: id.trim(), title: title.trim() || id.trim(), media: media.trim() ? (media.includes('\n') ? lines(media) : media.trim()) : undefined, kit, flow: flow || undefined, agent: agent.trim() || undefined, gates: { A: gA, C: gC, B: gB } })
+    const nA = Number(costA) || 0, nC1 = Number(costC1) || 0, nC2 = Number(costC2) || 0
+    const cost = costTokens.trim() ? { tokens: costTokens.trim(), tokensLeft: costLeft.trim() || undefined, attempts: { anchor: nA, clip1: nC1, clip2: nC2, total: nA + nC1 + nC2 }, note: costNote.trim() || undefined } : undefined
+    onSave({ gate: 'C', status: 'Chưa qua cổng', ...video, last_updated: new Date().toISOString().slice(0, 10), id: id.trim(), title: title.trim() || id.trim(), media: media.trim() ? (media.includes('\n') ? lines(media) : media.trim()) : undefined, kit, flow: flow || undefined, agent: agent.trim() || undefined, gates: { A: gA, C: gC, B: gB }, cost })
   }
   const sel = (v: string, set: (x: string) => void, opts: string[]) => (
     <select value={v} onChange={(e) => set(e.target.value)}>{opts.map((o) => <option key={o} value={o}>{o || '—'}</option>)}</select>
@@ -288,6 +297,15 @@ function VideoForm({ video, onSave, onDelete, onClose }: { video?: Video; onSave
       <Field label="Video ref (đường dẫn, mỗi dòng 1 file)"><textarea rows={2} value={refVideo} onChange={(e) => setRefVideo(e.target.value)} /></Field>
       <Field label="Ảnh ref / sản phẩm (đường dẫn, mỗi dòng 1 file)"><textarea rows={2} value={refImg} onChange={(e) => setRefImg(e.target.value)} /></Field>
       <Field label="Video đã gen (đường dẫn; để trống = Draft)"><input value={media} onChange={(e) => setMedia(e.target.value)} /></Field>
+      <p className="note">Chi phí gen — nhập tay từ báo cáo gen (để trống token thì không lưu chi phí; tổng lượt tự cộng).</p>
+      <div className="grid2">
+        <Field label="Token đã dùng (vd 11M)"><input value={costTokens} onChange={(e) => setCostTokens(e.target.value)} /></Field>
+        <Field label="Token còn lại (vd 718M)"><input value={costLeft} onChange={(e) => setCostLeft(e.target.value)} /></Field>
+        <Field label="Lượt thử · ảnh neo"><input type="number" min={0} value={costA} onChange={(e) => setCostA(Number(e.target.value) || 0)} /></Field>
+        <Field label="Lượt thử · clip 1"><input type="number" min={0} value={costC1} onChange={(e) => setCostC1(Number(e.target.value) || 0)} /></Field>
+        <Field label="Lượt thử · clip 2"><input type="number" min={0} value={costC2} onChange={(e) => setCostC2(Number(e.target.value) || 0)} /></Field>
+        <Field label="Ghi chú chi phí"><input value={costNote} onChange={(e) => setCostNote(e.target.value)} /></Field>
+      </div>
       <div className="rowact">
         <button className="btn pri" onClick={save}>{media.trim() ? 'Lưu' : 'Lưu Draft'}</button>
         <button className="btn" onClick={onClose}>Hủy</button>
@@ -407,6 +425,17 @@ function PromptCell({ store, v, compact }: { store: Store; v: Video; compact?: b
   )
 }
 
+// Chi phí gen: token + lượt thử (neo / clip 1 / clip 2). Chỉ hiển thị dữ liệu đã nhập, không tự tính.
+function costText(c: NonNullable<Video['cost']>) {
+  const a = c.attempts
+  return `${c.tokens}${c.tokensLeft ? ` · còn ${c.tokensLeft}` : ''} · ${a.total} lượt (neo ${a.anchor}, clip 1: ${a.clip1}, clip 2: ${a.clip2})${c.note ? ` · ${c.note}` : ''}`
+}
+function CostLine({ v, full }: { v: Video; full?: boolean }) {
+  const c = v.cost
+  if (!c) return null
+  return <div className={full ? 'note full cost-line' : 'note cost-line'}>Chi phí: {costText(c)}</div>
+}
+
 // Hàng gọn: mỗi ô tối đa 1–2 dòng, chỉ tóm tắt; mở hàng để xem đủ.
 function CompactRow({ store, v, g, onToggle, onEdit, onRemove }: { store: Store; v: Video; g?: CreativeGroup; onToggle: () => void; onEdit: () => void; onRemove: () => void }) {
   const ckBad = (checklistView(v)?.groups ?? []).flatMap((g) => g.rows).filter((r) => r.s === 'bad').map((r) => r.label)
@@ -424,7 +453,7 @@ function CompactRow({ store, v, g, onToggle, onEdit, onRemove }: { store: Store;
       <td className="vl-gate vl-fck" colSpan={3}>{v.flowChecks ? (
         <div className="cz-ck"><ChecklistCount v={v} />{ckBad.length ? <span className="cz-clamp1 note">Không đạt: {ckBad.slice(0, 3).join(' · ')}</span> : null}</div>
       ) : <span className="note">{v.gates ? 'Cổng A/C/B cũ' : 'Chưa chấm'}</span>}</td>
-      <td className="vl-ready"><Pill tone={tone}>{label}</Pill>{v.verdict?.gen ? <span className="note cz-gen">Gen: {v.verdict.gen}</span> : null}</td>
+      <td className="vl-ready"><Pill tone={tone}>{label}</Pill>{v.verdict?.gen ? <span className="note cz-gen">Gen: {v.verdict.gen}</span> : null}<CostLine v={v} /></td>
       <td className="vl-soc"><SocialCell store={store} v={v} /></td>
       <td className="vl-upd">{v.last_updated ?? <span className="note">—</span>}</td>
       <td className="vl-act"><button className="link" onClick={onEdit}>Sửa</button><button className="link bad" onClick={onRemove}>Xóa</button></td>
