@@ -40,6 +40,31 @@ export interface ProductInfoItem {
   date: string
 }
 
+/** Sản phẩm của store (nạp từ 1-info/products.json). Ảnh có thể thay bằng ảnh Muse sau, chỉ đổi path. */
+export interface StoreProduct {
+  id: string
+  code: string
+  name: string
+  slug?: string
+  images: { path: string; role: string; label: string }[]
+  price_sell_usd: number
+  cost_ref_usd: number
+  cost_note?: string
+  margin: { usd: number; pct: number; formula?: string; labels?: string[]; cpa_scenarios?: { cpa_usd: number; profit_after_ads_usd: number; label: string }[] }
+  summary?: string
+  description?: string
+  audience?: string
+  usage?: string[]
+  claims_ok?: string[]
+  claims_no?: string[]
+  specs?: { k: string; v: string; label?: string }[]
+  reference?: { ali_url?: string; ali_item_id?: string; seller?: string; supplier_price_note?: string; status?: string }
+  risks?: string[]
+  price_rationale?: string
+  image_status?: string
+  detail_path?: string
+}
+
 export interface Video {
   id: string
   /** Các lần gen cũ của cùng video (số thứ tự trùng, lần gen nhỏ hơn). Chỉ bản mới nhất nằm trong danh sách chính. */
@@ -212,6 +237,8 @@ export interface Store {
   /** Ảnh tham chiếu sản phẩm để xem nhanh (đường dẫn tương đối từ thư mục working, phục vụ qua /media/). */
   productImages?: { src: string; label: string }[]
   productInfo: ProductInfoItem[]
+  /** Danh sách sản phẩm (WhiskerWall: 3 SP A/B/C). Tab Store info hiện danh sách này nếu có. */
+  products?: StoreProduct[]
   creative: Video[]
   social: Record<ChannelKey, Channel>
   // Task Jira liên quan và các agent (Claude, Muse, Amin...) đang làm từng task

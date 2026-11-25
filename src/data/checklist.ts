@@ -15,6 +15,17 @@ export const REQUIRED_PRODUCT: Array<[number, string]> = [
   [19, 'Claim được / không được'],
 ]
 
+// Khi store đã có danh sách products (mỗi SP có ảnh, giá mua, giá bán), 3 mục này tính theo từng SP, không đọc từ productInfo (P18, KAN-125).
+const COVERED_BY_PRODUCTS = new Set([6, 10, 12])
+function productsCover(s: Store, n: number): boolean {
+  const ps = s.products ?? []
+  if (!ps.length) return false
+  if (n === 6) return ps.every((x) => (x.images?.length ?? 0) > 0)
+  if (n === 10) return ps.every((x) => x.cost_ref_usd != null)
+  if (n === 12) return ps.every((x) => x.price_sell_usd != null)
+  return false
+}
+
 export interface Check {
   product: { done: number; total: number; missing: string[] }
   creative: { total: number; passed: number; failed: number; unreviewed: number; evaluated: number; keep: number; fix: number; drop: number; unknown: number }
@@ -23,7 +34,7 @@ export interface Check {
 }
 
 export function checkStore(s: Store): Check {
-  const missing = REQUIRED_PRODUCT.filter(([n]) => !s.productInfo.find((r) => r.n === n)?.value).map(([, l]) => l)
+  const missing = REQUIRED_PRODUCT.filter(([n]) => !(COVERED_BY_PRODUCTS.has(n) && productsCover(s, n)) && !s.productInfo.find((r) => r.n === n)?.value).map(([, l]) => l)
   // Qua cổng = cổng A và B đều "Đạt", cổng C "Đạt" hoặc "Không áp dụng". Chưa có gates thì dùng status cũ.
   const ok = (x?: string) => x === 'Đạt'
   const passedOf = (v: Store['creative'][number]) => v.gates ? ok(v.gates.A) && ok(v.gates.B) && (ok(v.gates.C) || v.gates.C === 'Không áp dụng') : v.status === 'Đã qua cổng'

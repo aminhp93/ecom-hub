@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Store } from '../data/types'
 import { StoreForm } from '../components/StoreForm'
 import { Modal } from '../components/Modal'
+import { StoreProducts } from '../components/StoreProducts'
 import { ProductInfoTable } from '../components/ProductInfoTable'
 import { CreativeBoard } from '../components/CreativeBoard'
 import { ChecklistPanel } from '../components/ChecklistPanel'
@@ -22,7 +23,7 @@ export function StoreDetail({ store, onBack, onSave, onRemove }: Props) {
   const [tab, setTab] = useState<Tab>('product')
   const [dialog, setDialog] = useState<'edit' | 'delete' | null>(null)
   const tabs: Array<[Tab, string]> = [
-    ['product', 'Product info'],
+    ['product', 'Store info'],
     ['research', 'Nghiên cứu'],
     ['creative', 'Creative'],
     ['social', 'Social'],
@@ -56,6 +57,7 @@ export function StoreDetail({ store, onBack, onSave, onRemove }: Props) {
         ))}
       </div>
       <div className="stack">
+        {tab === 'product' && !!store.products?.length && <StoreProducts store={store} />}
         {tab === 'product' && <ProductInfoTable store={store} onChange={onSave} />}
         {tab === 'research' && <ResearchTab store={store} />}
         {tab === 'creative' && <CreativeBoard store={store} onChange={onSave} />}

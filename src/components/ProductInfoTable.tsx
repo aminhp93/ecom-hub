@@ -26,6 +26,8 @@ function Linkify({ text }: { text: string }) {
 
 /** Thông tin chính hiện trên cùng (theo số thứ tự dòng, ổn định dù đổi tên): ảnh, Facebook, web, ads đối thủ, giá mua, giá bán. */
 const KEY_ROWS = [6, 21, 22, 23, 10, 12]
+/** Store đã có danh sách SP (ảnh, giá mua, giá bán nằm ở đó): bỏ 3 dòng này khỏi khối thông tin chính (P18, KAN-125). */
+const DUP_WITH_PRODUCTS = [6, 10, 12]
 const KEY_TITLE: Record<number, string> = {
   6: 'Hình ảnh sản phẩm',
   21: 'Facebook page (đối thủ)',
@@ -58,12 +60,20 @@ function OneLine({ text }: { text: string }) {
   return <span title={text}>{text}</span>
 }
 
+/** Số bài theo dữ liệu bài của kênh (cùng nguồn với tab Creative/Social). */
+function postedOf(store: Store, k: ChannelKey): string {
+  const ps = store.social[k].posts
+  if (!ps.length) return ''
+  return `${ps.filter((p) => p.status === 'Đã đăng').length}/${ps.length} bài đã đăng`
+}
+
 export function ProductInfoTable({ store, onChange }: Props) {
   const [editing, setEditing] = useState<ProductInfoItem | null>(null)
   const [preview, setPreview] = useState(false)
   const [zoom, setZoom] = useState<{ src: string; label: string } | null>(null)
-  const keyRows = KEY_ROWS.map((n) => store.productInfo.find((r) => r.n === n)).filter((r): r is ProductInfoItem => !!r)
-  const rest = store.productInfo.filter((r) => !KEY_ROWS.includes(r.n))
+  const keyNums = store.products?.length ? KEY_ROWS.filter((n) => !DUP_WITH_PRODUCTS.includes(n)) : KEY_ROWS
+  const keyRows = keyNums.map((n) => store.productInfo.find((r) => r.n === n)).filter((r): r is ProductInfoItem => !!r)
+  const rest = store.productInfo.filter((r) => !keyNums.includes(r.n))
 
   const saveRow = (row: ProductInfoItem) => {
     onChange({ ...store, productInfo: store.productInfo.map((r) => (r.n === row.n ? row : r)) })
@@ -111,10 +121,10 @@ export function ProductInfoTable({ store, onChange }: Props) {
               <span className="pi-lab">{label}</span>
               <span className="pi-val">
                 {c.url
-                  ? <a href={c.url} target="_blank" rel="noreferrer" title={c.url}>{c.handle ? (c.handle.startsWith('@') ? c.handle : `@${c.handle}`) : c.url.replace(/^https?:\/\/(www\.)?/, '')}</a>
+                  ? <a href={c.url} target="_blank" rel="noreferrer" title={c.url}>{c.handle ? (/^[A-Za-z0-9._]+$/.test(c.handle) ? `@${c.handle}` : c.handle) : c.url.replace(/^https?:\/\/(www\.)?/, '')}</a>
                   : <Pill>{c.status === 'Chưa tạo' ? 'Chưa tạo' : 'Chưa có link'}</Pill>}
               </span>
-              <span />
+              <span className="note">{postedOf(store, k)}</span>
             </div>
           )
         })}
