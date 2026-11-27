@@ -4,7 +4,7 @@ import { WorklogCards } from '../components/WorklogPanel'
 import { AllWorklog } from '../components/AllWorklog'
 import { TimelinePlan } from '../components/TimelinePlan'
 import { DashAside } from './Dashboard'
-import type { TodayDay, TodayIdea, TodayItem } from '../data/todayTypes'
+import type { TodayDay, TodayIdea, TodayItem, YTask } from '../data/todayTypes'
 
 /** Tab "Hôm nay" (Morning Overview, KAN-117). Dữ liệu: today/YYYY-MM-DD.json ở Drive, nạp qua virtual:working-data. */
 
@@ -45,6 +45,31 @@ function Group({ label, items, tone }: { label: string; items: TodayItem[]; tone
   )
 }
 
+const YSTATE = { done: 'Đã xong', doing: 'Đang dở', blocked: 'Vướng', idle: 'Không tiến triển' } as const
+
+/** Summary theo task: một dòng = trạng thái + mã task + tiêu đề (như sidebar); bên trong là tóm tắt hôm qua. */
+function YesterdayTasks({ tasks }: { tasks: YTask[] }) {
+  return (
+    <ul className="td-ytasks">
+      {tasks.map((x, n) => (
+        <li key={n}>
+          <details className={`td-ytask s-${x.state}`} open>
+            <summary>
+              <span className={`td-ystate s-${x.state}`}>{YSTATE[x.state]}</span>
+              {x.key && <Key k={x.key} solid />}
+              <b className="td-ytitle">{x.title}</b>
+            </summary>
+            <div className="td-ybody">
+              {x.did.length > 0 && <><h4>Hôm qua đã làm</h4><ul>{x.did.map((s, i) => <li key={i}>{s}</li>)}</ul></>}
+              {(x.left.length > 0 || (x.block?.length ?? 0) > 0) && <><h4>Còn dở / chờ</h4><ul>{x.left.map((s, i) => <li key={i}>{s}</li>)}{x.block?.map((s, i) => <li key={'b' + i} className="blk">{s}</li>)}</ul></>}
+            </div>
+          </details>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 /** Cấu trúc trang: 1 Summary (hôm qua) → 2 Brainstorm (ý hôm nay) → 3 Plan (làm gì hôm nay). Bấm để nhảy tới phần. */
 type Tab = 0 | 1 | 2 | 3 | 4
 
@@ -53,7 +78,7 @@ function PhaseNav({ day, active, onPick }: { day: TodayDay; active: Tab | null; 
     { n: 0, id: 'td-attn', title: 'Chú ý & lịch', sub: 'Cần chú ý và lịch hạn',
       stats: [] },
     { n: 1, id: 'td-summary', title: 'Summary', sub: 'Hôm qua đã làm gì',
-      stats: [{ v: day.yesterday.done.length, l: 'xong', tone: 'ok' }, { v: day.yesterday.open.length, l: 'dở' }, { v: day.yesterday.blockers.length, l: 'vướng', tone: 'bad' }] },
+      stats: day.yesterday.tasks?.length ? [{ v: day.yesterday.tasks.filter((x) => x.state === 'done').length, l: 'xong', tone: 'ok' }, { v: day.yesterday.tasks.filter((x) => x.state === 'doing').length, l: 'dở' }, { v: day.yesterday.tasks.filter((x) => x.state === 'blocked').length, l: 'vướng', tone: 'bad' }] : [{ v: day.yesterday.done.length, l: 'xong', tone: 'ok' }, { v: day.yesterday.open.length, l: 'dở' }, { v: day.yesterday.blockers.length, l: 'vướng', tone: 'bad' }] },
     { n: 2, id: 'td-brainstorm', title: 'Brainstorm', sub: 'Ý và việc muốn làm hôm nay',
       stats: day.plan.eval ? [{ v: day.ideas.length, l: 'ý của Amin' }] : [{ v: day.ideas.length, l: 'ý' }, { v: day.ideas.filter((x) => x.kind === 'no-task').length, l: 'chưa có task' }] },
     { n: 3, id: 'td-plan', title: 'Plan', sub: 'Kế hoạch theo ngày: việc sẽ làm hôm nay',
@@ -113,13 +138,17 @@ export function Today() {
   const days = useMemo(() => [...(TODAY_DAYS as TodayDay[])].sort((a, b) => a.date.localeCompare(b.date)), [])
   // Mặc định luôn là ngày hôm nay; ngày cũ chọn bằng mũi tên hoặc danh sách. Không có file của hôm nay thì báo rõ, không tự nhảy sang ngày cũ.
   const [sel, setSel] = useState(todayIso)
-  const day = days.find((d) => d.date === sel)
-  const prev = [...days].reverse().find((d) => d.date < sel)
-  const next = days.find((d) => d.date > sel)
+  const found = days.find((d) => d.date === sel)
+  // Ngày mới chưa có file: vẫn dựng 5 thẻ rỗng + Nhật ký của ngày đó (Amin 26/11).
+  const day: TodayDay = found ?? { date: sel, status: 'draft', yesterday: { done: [], open: [], blockers: [] }, ideas: [], plan: { top: [], intoTasks: [], parking: [] }, timeline: { tasks: [], recentlyDone: [] } }
+  // Danh sách ngày điều hướng = các ngày có file + HÔM NAY (kể cả chưa có file) + ngày đang xem; để luôn quay lại được hôm nay (Amin 26/11).
+  const dates = useMemo(() => [...new Set([...days.map((d) => d.date), todayIso(), sel])].sort(), [days, sel])
+  const prev = [...dates].reverse().find((d) => d < sel)
+  const next = dates.find((d) => d > sel)
   // Mặc định tất cả card đóng; bấm card đang mở thì đóng lại (Amin 24/11).
   const [tab, setTab] = useState<Tab | null>(null)
   const pickTab = (n: Tab) => setTab((cur) => (cur === n ? null : n))
-  const lsKey = day ? `sh-today-done:${day.date}` : ''
+  const lsKey = `sh-today-done:${day.date}`
   const [saved, setSaved] = useState<Record<string, number[]>>({})
   const ticks = saved[lsKey] ?? readTicks(lsKey)
   const tick = (n: number) => {
@@ -130,28 +159,15 @@ export function Today() {
 
   const nav = (
     <div className="td-nav" role="group" aria-label="Đổi ngày">
-      <button className="btn" onClick={() => prev && setSel(prev.date)} disabled={!prev} aria-label="Ngày trước">←</button>
+      <button className="btn" onClick={() => prev && setSel(prev)} disabled={!prev} aria-label="Ngày trước">←</button>
       <label className="td-pick"><span className="td-sr">Chọn ngày</span>
         <select value={sel} onChange={(e) => setSel(e.target.value)} aria-label="Chọn ngày">
-          {!days.some((d) => d.date === sel) && <option value={sel}>{fmtDate(sel)} (chưa có dữ liệu)</option>}
-          {[...days].reverse().map((d) => <option key={d.date} value={d.date}>{fmtDate(d.date)}{d.date === todayIso() ? ' · hôm nay' : ''}{d.status === 'draft' ? ' · nháp' : ''}</option>)}
+          {[...dates].reverse().map((dt) => { const d = days.find((x) => x.date === dt); return <option key={dt} value={dt}>{fmtDate(dt)}{dt === todayIso() ? ' · hôm nay' : ''}{!d ? ' (chưa có dữ liệu)' : d.status === 'draft' ? ' · nháp' : ''}</option> })}
         </select>
       </label>
-      <button className="btn" onClick={() => next && setSel(next.date)} disabled={!next} aria-label="Ngày sau">→</button>
+      <button className="btn" onClick={() => next && setSel(next)} disabled={!next} aria-label="Ngày sau">→</button>
     </div>
   )
-
-  if (!day) {
-    return (
-      <>
-        <header className="top td-top"><h1>Hôm nay</h1>{nav}</header>
-        <div className="card">
-          <p className="note">{days.length ? `Chưa có dữ liệu cho ${fmtDate(sel)}. Chọn ngày khác ở trên (không tự dùng dữ liệu ngày cũ).` : 'Chưa có dữ liệu ngày nào. File nằm ở 0-dashboard/dashboard-data/today/YYYY-MM-DD.json (chỉ đọc được khi chạy cục bộ có WORKING_ROOT).'}</p>
-        </div>
-        <WorklogCards />
-      </>
-    )
-  }
 
   const ideas = day.ideas
   const top = day.plan.top
@@ -162,18 +178,21 @@ export function Today() {
         <h1>Hôm nay</h1>
         {nav}
       </header>
-      {day.status === 'draft' && <p className="banner"><b>Bản nháp, chưa duyệt.</b> Chỉ hiện ở máy cục bộ; chưa publish.</p>}
+      {!found && <p className="banner"><b>Chưa có dữ liệu ngày này.</b> 5 thẻ để trống; Nhật ký bên dưới là của ngày {fmtDate(sel)}.</p>}
+      {found && day.status === 'draft' && <p className="banner"><b>Bản nháp, chưa duyệt.</b> Chỉ hiện ở máy cục bộ; chưa publish.</p>}
       <PhaseNav day={day} active={tab} onPick={pickTab} />
       <div className="td-grid">
         {tab === 0 && <Sec id="td-attn" phase={0} title="Chú ý & lịch" hint="Cần chú ý và lịch hạn từ Bảng điều khiển." className="td-attn">
           <DashAside />
         </Sec>}
         {tab === 1 && <Sec id="td-summary" phase={1} title="Summary · kết quả hôm qua" hint="Việc đã xong, còn dở và đang vướng của ngày hôm trước." className="td-yest">
-          <div className="td-cols">
-            <Group label="Đã xong" items={day.yesterday.done} tone="ok" />
-            <Group label="Dang dở" items={day.yesterday.open} />
-            <Group label="Blocker" items={day.yesterday.blockers} tone="bad" />
-          </div>
+          {day.yesterday.tasks?.length
+            ? <YesterdayTasks tasks={day.yesterday.tasks} />
+            : <div className="td-cols">
+                <Group label="Đã xong" items={day.yesterday.done} tone="ok" />
+                <Group label="Dang dở" items={day.yesterday.open} />
+                <Group label="Blocker" items={day.yesterday.blockers} tone="bad" />
+              </div>}
           <div className="td-cols td-impact">
             <Group label="Ảnh hưởng tới Plan hôm qua (plan → kết quả)" items={day.yesterday.planImpact ?? []} />
             <Group label="Ảnh hưởng tới Timeline chung" items={day.yesterday.timelineImpact ?? []} />
@@ -237,8 +256,8 @@ export function Today() {
           </Sec>
         )}
       </div>
-      <WorklogCards />
-      <div className="td-grid"><AllWorklog /></div>
+      <WorklogCards date={day.date} />
+      <div className="td-grid"><AllWorklog date={day.date} /></div>
     </>
   )
 }

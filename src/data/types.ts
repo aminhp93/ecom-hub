@@ -115,7 +115,11 @@ export interface Video {
   // Kết luận tổng của verify độc lập (cột "Kết luận"): có thì ưu tiên; không có thì suy từ readiness (chỉ Sẵn sàng khi Final approved)
   verdict?: { label: 'Sẵn sàng' | 'Chưa sẵn sàng' | 'Chưa làm'; gen?: string; reasons?: { chan?: string[]; hauky?: string[]; chua?: string[]; chung?: string; next?: string }; by: string; date: string; source?: string }
   // Chi phí gen (token + lượt thử), nhập tay từ báo cáo gen / CREDIT-LOG; web chỉ hiển thị, không tự tính.
-  cost?: { tokens: string; tokensLeft?: string; attempts: { anchor: number; clip1: number; clip2: number; total: number }; note?: string }
+  // KAN-132/P29: đánh giá nhiều nguồn (Amin thủ công, ChatGPT độc lập, Claude V28), tách bạch; cột "Đánh giá"
+  reviews?: Array<{ id: string; label: string; kind: string; by: string; date: string; headline: string; full: string[]; file: string; note?: string }>
+  // KAN-132/P29: cột Input chỉ preview các asset chính (ảnh neo nhân vật + ảnh sản phẩm); file còn lại vào "Input phụ" (thu gọn)
+  inputMain?: Array<{ path: string; role: string }>
+  cost?: { tokens: string; tokensLeft?: string; attempts?: { anchor: number; clip1: number; clip2: number; total: number }; note?: string }
 }
 
 // KAN-115 B4: đánh giá cụ thể từng creative (ads vs social). Do Claude-A ghi, chờ verify.

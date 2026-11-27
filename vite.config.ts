@@ -250,25 +250,29 @@ function zernioPlugin(): Plugin {
         return json(res, r.status, r.data)
       }
       if (url === '/zernio/publish' && req.method === 'POST') {
-        const b = JSON.parse(await readBody(req)) as { storeId?: string; mediaPath?: string; caption: string; platform: string; accountId: string; mode: 'draft' | 'schedule' | 'now'; scheduledFor?: string; timezone?: string; title?: string }
+        const b = JSON.parse(await readBody(req)) as { storeId?: string; mediaPath?: string | string[]; caption: string; platform: string; accountId: string; mode: 'draft' | 'schedule' | 'now'; scheduledFor?: string; timezone?: string; title?: string }
         const k = b.storeId ? zernioKey(b.storeId) : ''
         if (!k) return json(res, 500, { error: `Thiếu key Zernio của store "${b.storeId ?? ''}"` })
         if (!['draft', 'schedule', 'now'].includes(b.mode)) return json(res, 400, { error: 'mode phải là draft, schedule hoặc now' })
         if (b.mode === 'schedule' && !b.scheduledFor) return json(res, 400, { error: 'Thiếu giờ hẹn' })
+        // mediaPath có thể là một đường dẫn hoặc danh sách (bài social copy từ video.media): xử lý từng file, giữ thứ tự
+        const paths = (Array.isArray(b.mediaPath) ? b.mediaPath : b.mediaPath ? [b.mediaPath] : []).filter((x): x is string => typeof x === 'string' && !!x)
         let mediaItems: { type: string; url: string }[] | undefined
-        if (b.mediaPath && !/^https?:/.test(b.mediaPath)) {
-          const file = path.resolve(root, b.mediaPath)
-          const type = TYPES[path.extname(file).toLowerCase()]
-          if (!file.startsWith(root + path.sep) || !type || !fs.existsSync(file)) return json(res, 404, { error: 'Không thấy file media' })
-          const buf = fs.readFileSync(file)
-          const pre = await call(k, '/media/presign', { method: 'POST', body: JSON.stringify({ filename: path.basename(file), contentType: type, size: buf.length }) })
-          const pd = pre.data as { uploadUrl?: string; publicUrl?: string }
-          if (!pre.ok || !pd.uploadUrl || !pd.publicUrl) return json(res, pre.status || 502, { step: 'presign', detail: pre.data })
-          const up = await fetch(pd.uploadUrl, { method: 'PUT', headers: { 'Content-Type': type }, body: buf })
-          if (!up.ok) return json(res, 502, { step: 'upload', detail: `PUT ${up.status}` })
-          mediaItems = [{ type: type.startsWith('video') ? 'video' : 'image', url: pd.publicUrl }]
-        } else if (b.mediaPath) {
-          mediaItems = [{ type: /\.(png|jpe?g|gif|webp)$/i.test(b.mediaPath) ? 'image' : 'video', url: b.mediaPath }]
+        for (const mp of paths) {
+          if (!/^https?:/.test(mp)) {
+            const file = path.resolve(root, mp)
+            const type = TYPES[path.extname(file).toLowerCase()]
+            if (!file.startsWith(root + path.sep) || !type || !fs.existsSync(file)) return json(res, 404, { error: 'Không thấy file media', file: mp })
+            const buf = fs.readFileSync(file)
+            const pre = await call(k, '/media/presign', { method: 'POST', body: JSON.stringify({ filename: path.basename(file), contentType: type, size: buf.length }) })
+            const pd = pre.data as { uploadUrl?: string; publicUrl?: string }
+            if (!pre.ok || !pd.uploadUrl || !pd.publicUrl) return json(res, pre.status || 502, { step: 'presign', detail: pre.data })
+            const up = await fetch(pd.uploadUrl, { method: 'PUT', headers: { 'Content-Type': type }, body: buf })
+            if (!up.ok) return json(res, 502, { step: 'upload', detail: `PUT ${up.status}` })
+            ;(mediaItems ??= []).push({ type: type.startsWith('video') ? 'video' : 'image', url: pd.publicUrl })
+          } else {
+            ;(mediaItems ??= []).push({ type: /\.(png|jpe?g|gif|webp)$/i.test(mp) ? 'image' : 'video', url: mp })
+          }
         }
         const body: Record<string, unknown> = {
           content: b.caption,

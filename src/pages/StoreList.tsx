@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { Store } from '../data/types'
-import { Meter, StatusPill } from '../components/ui'
 import { StoreForm } from '../components/StoreForm'
 import { checkStore } from '../data/checklist'
 import { Modal } from '../components/Modal'
@@ -16,17 +15,12 @@ interface Props {
 
 type Dialog = { kind: 'new' } | { kind: 'edit'; store: Store } | { kind: 'delete'; store: Store } | { kind: 'reset' } | null
 
-const channelCount = (s: Store) => Object.values(s.social).filter((c) => c.status === 'Đã đăng bài đầu').length
 const videoCount = (s: Store) => s.creative.filter((v) => v.media).length
 
 export function StoreList({ stores, onOpen, onCreate, onSave, onRemove, onReset }: Props) {
-  const [q, setQ] = useState('')
   const [dialog, setDialog] = useState<Dialog>(null)
 
-  const rows = useMemo(() => {
-    const t = q.trim().toLowerCase()
-    return stores.filter((s) => !t || `${s.name} ${s.product} ${s.jira}`.toLowerCase().includes(t))
-  }, [stores, q])
+  const rows = stores
 
   return (
     <>
@@ -34,20 +28,18 @@ export function StoreList({ stores, onOpen, onCreate, onSave, onRemove, onReset 
         <h1>Store</h1>
         <span className="note">{stores.length} store · cùng một template</span>
         <span className="sp" />
-        <input id="search" type="search" className="search" placeholder="Tìm tên, sản phẩm, KAN-xx" value={q} onChange={(e) => setQ(e.target.value)} />
-        <button className="btn pri" onClick={() => setDialog({ kind: 'new' })}>+ Tạo store</button>
       </div>
       <div className="card">
         <div className="scroll">
           <table className="rt">
             <thead>
               <tr>
-                <th>Store</th><th>Jira</th><th>Trạng thái</th><th>Product info</th><th>Còn thiếu</th><th>Creative</th><th>Social</th><th>Cập nhật</th><th />
+                <th>Store</th><th>Còn thiếu</th><th>Creative</th><th>Cập nhật</th><th />
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={9} className="note">Không có store khớp. Bấm Tạo store để thêm.</td></tr>
+                <tr><td colSpan={5} className="note">Chưa có store.</td></tr>
               )}
               {rows.map((s) => (
                 <tr key={s.id} className="click" onClick={() => onOpen(s.id)}>
@@ -57,12 +49,8 @@ export function StoreList({ stores, onOpen, onCreate, onSave, onRemove, onReset 
                       <span>{s.product}</span>
                     </div>
                   </td>
-                  <td className="mono" data-label="Jira">{s.jira}</td>
-                  <td data-label="Trạng thái"><StatusPill status={s.status} /></td>
-                  <td data-label="Product info"><Meter value={s.productInfo.filter((r) => r.value).length} max={s.productInfo.length} /></td>
                   <td data-label="Còn thiếu" className="miss">{checkStore(s).product.missing.join(', ') || 'Đủ'}</td>
                   <td data-label="Creative">{videoCount(s)} video · {s.creative.length} mục</td>
-                  <td data-label="Social">{channelCount(s)}/4 kênh</td>
                   <td className="mono" data-label="Cập nhật">{s.updated}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div className="rowact">

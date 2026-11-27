@@ -4,11 +4,13 @@ export interface TodayItem { t: string; s?: string; key?: string }
 export interface TodayIdea { topic: string; t: string; kind: 'has-task' | 'no-task' | 'unverified'; keys: string[]; note?: string; s?: string; kw?: string[]; flow?: string[]; hl?: string[] }
 /** Đánh giá một ý Brainstorm với tình hình task hiện tại (Plan). */
 export interface PlanEval { idea: number; verdict: 'first' | 'into-task' | 'new-task' | 'later' | 'done'; key?: string; state: string; today: 'yes' | 'wait' | 'no'; todayNote?: string; why: string }
+/** Summary theo task (giống sidebar): mỗi task một dòng, bên trong là việc hôm qua đã làm + còn dở/chờ + vướng. */
+export interface YTask { key?: string; title: string; state: 'done' | 'doing' | 'blocked' | 'idle'; did: string[]; left: string[]; block?: string[] }
 export interface TodayTop extends TodayItem { done?: boolean }
 export interface TodayDay {
   date: string
   status: 'draft' | 'published'
-  yesterday: { done: TodayItem[]; open: TodayItem[]; blockers: TodayItem[]; planImpact?: TodayItem[]; timelineImpact?: TodayItem[] }
+  yesterday: { done: TodayItem[]; open: TodayItem[]; blockers: TodayItem[]; tasks?: YTask[]; planImpact?: TodayItem[]; timelineImpact?: TodayItem[] }
   ideas: TodayIdea[]
   plan: { top: TodayTop[]; intoTasks: TodayItem[]; parking: TodayItem[]; rhythm?: string; eval?: PlanEval[] }
   /** Timeline (tổng quan, cập nhật theo ngày): các task đang chạy còn lại + task vừa xong. */

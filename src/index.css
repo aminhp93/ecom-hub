@@ -1452,3 +1452,60 @@ ol.td-top li.on .td-tick input { accent-color: var(--ok); }
 .crf-cmd-row { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
 .crf-cmd-row code { font-size: calc(12px * var(--fs)); background: var(--soft); padding: 2px 6px; border-radius: 4px; white-space: nowrap; overflow-x: auto; max-width: 100%; }
 @media (max-width: 640px) { .crf-cmd-row { grid-template-columns: 1fr; } }
+
+/* KAN-132/P29: cột Đánh giá (2 khối có nhãn) + Input phụ thu gọn */
+.vlist td.vl-rv { min-width: 220px; max-width: 300px; vertical-align: top; }
+.rv-cell { display: flex; flex-direction: column; gap: 6px; }
+.rv-box { border-left: 3px solid var(--line); padding: 2px 6px; border-radius: 3px; }
+.rv-lb { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+.rv-tx { font-size: 12px; line-height: 1.35; }
+.rv-amin { border-left-color: #b5651d; } .rv-gpt { border-left-color: #2f7d5b; } .rv-cl { border-left-color: #4a62b8; }
+.rv-sec { border-left: 3px solid var(--line); padding: 4px 10px; margin: 10px 0; }
+.rv-sec h4 { margin: 0 0 2px; } .rv-sec ul { margin: 6px 0; padding-left: 18px; }
+.ui-more { margin-top: 6px; font-size: 12px; } .ui-more summary { cursor: pointer; }
+
+/* Summary theo task (kiểu sidebar) */
+.td-ytasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.td-ytask { border: 1px solid var(--line, rgba(128,128,128,.25)); border-radius: 10px; padding: 8px 12px; background: var(--surface); }
+.td-ytask > summary { display: flex; gap: 8px; align-items: center; cursor: pointer; list-style: none; min-width: 0; }
+.td-ytask > summary::-webkit-details-marker { display: none; }
+.td-ytitle { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.td-ystate { font-size: calc(11px * var(--fs)); font-weight: 700; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+.td-ystate.s-done { background: var(--ok-bg); color: var(--ok); } .td-ystate.s-doing { background: var(--warn-bg); color: var(--warn); }
+.td-ystate.s-blocked { background: var(--bad-bg); color: var(--bad); } .td-ystate.s-idle { background: var(--idle-bg); color: var(--idle); }
+.td-ytask.s-blocked { border-color: var(--bad); }
+.td-ybody { margin-top: 8px; display: grid; gap: 4px; }
+.td-ybody h4 { margin: 6px 0 2px; font-size: calc(12px * var(--fs)); color: var(--muted); }
+.td-ybody ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.td-ybody li.blk { color: var(--bad); }
+
+/* Bảng Creative gọn: đủ cột trên một hàng, không cuộn ngang (27/11/2026); chi tiết mở ở hàng riêng bên dưới */
+.vlist.vl-fit { table-layout: fixed; width: 100%; border-collapse: collapse; }
+.vlist.vl-fit th, .vlist.vl-fit td { min-width: 0 !important; max-width: none !important; position: static !important; box-shadow: none; overflow-wrap: anywhere; white-space: normal !important; padding: 6px 5px; font-size: calc(12px * var(--fs)); }
+.vlist.vl-fit td.vl-id, .vlist.vl-fit td.vl-media { width: auto; background: transparent; }
+.vlist.vl-fit th .gh { display: none; }
+.vlist.vl-fit td.vl-media { padding-inline: 3px; }
+.vlist.vl-fit td.vl-media .th-wrap, .vlist.vl-fit td.vl-media video.th, .vlist.vl-fit td.vl-media img.th { width: 100% !important; max-width: 40px !important; }
+.vlist.vl-fit tr.vl-cz .vl-id b { overflow-wrap: anywhere; }
+.vlist.vl-fit .vl-tg { width: 22px; height: 22px; margin-right: 3px; }
+.vlist.vl-fit .vl-cell, .vlist.vl-fit .cz-clamp { max-height: 4.6em; overflow: hidden; }
+.vlist.vl-fit tr.vl-cz .vl-ready .pill { white-space: normal !important; }
+.vlist-wrap { overflow-x: visible; }
+.vlist tr.vl-detail > td { background: color-mix(in srgb, var(--soft) 40%, transparent); padding: 10px 12px; }
+.vl-dgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 16px; align-items: start; }
+.vl-dgrid section { min-width: 0; overflow-wrap: anywhere; }
+.vl-dgrid section.wide { grid-column: 1 / -1; }
+.vl-dgrid h4 { margin: 0 0 4px; font-size: calc(11px * var(--fs)); text-transform: uppercase; color: var(--muted); }
+.vl-dgrid .vl-media { width: auto; }
+.vl-dgrid .vl-gates { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.vl-dact { display: flex; gap: 12px; }
+/* hàng gọn: mỗi ô tối đa ~3 dòng, phần phụ xem ở hàng chi tiết */
+.vlist.vl-fit tr.vl-cz td:not(.vl-id):not(.vl-media) > * { max-height: 3.9em; overflow: hidden; }
+.vlist.vl-fit tr.vl-cz .cz-gen, .vlist.vl-fit tr.vl-cz .cost-line, .vlist.vl-fit tr.vl-cz .vl-ref .note + *, .vlist.vl-fit tr.vl-cz .gh { display: none !important; }
+.vlist.vl-fit tr.vl-cz .vl-ready .pill { display: block; border-radius: 8px; max-height: 3.9em; overflow: hidden; text-overflow: ellipsis; padding: 2px 6px; line-height: 1.3; }
+.vlist.vl-fit tr.vl-cz .vl-ref .ui-list, .vlist.vl-fit tr.vl-cz .vl-prompt .pc { max-height: 3.9em; overflow: hidden; }
+.vlist.vl-fit tr.vl-cz .vl-soc .soc-cell { max-height: 4.2em; overflow: hidden; }
+.vlist.vl-fit tr.vl-cz .vl-id .vl-ag { max-height: 2.6em; overflow: hidden; }
+.vl-dgrid section { max-height: 360px; overflow: auto; scrollbar-width: thin; }
+.vl-dgrid section.wide { max-height: 520px; }
+.vl-dgrid section.vl-dact { max-height: none; overflow: visible; }

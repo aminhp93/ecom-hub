@@ -8,15 +8,15 @@ const CLS: Record<St, string> = { 'Còn lại': 'todo', 'Đang làm': 'doing', '
 const JIRA = 'https://phamsworkspace-42448765.atlassian.net/browse/'
 const num = (k: string) => Number(k.split('-')[1])
 
-export function AllWorklog() {
+export function AllWorklog({ date }: { date: string }) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [err, setErr] = useState('')
   const [st, setSt] = useState<'all' | St>('all')
   const [flag, setFlag] = useState<'all' | 'noev' | 'nosum'>('all')
   const [task, setTask] = useState('all')
   useEffect(() => {
-    fetch('/worklog/all').then((r) => r.json()).then((d: { items: Row[] }) => setRows(d.items)).catch(() => setErr('Không đọc được /worklog/all (chỉ có khi chạy dev server).'))
-  }, [])
+    fetch('/worklog/all').then((r) => r.json()).then((d: { items: Row[] }) => setRows(d.items.filter((r) => r.date === date))).catch(() => setErr('Không đọc được /worklog/all (chỉ có khi chạy dev server).'))
+  }, [date])
   const tasks = useMemo(() => [...new Set((rows ?? []).map((r) => r.key))].sort((a, b) => num(a) - num(b)), [rows])
   const shown = useMemo(() => (rows ?? []).filter((r) =>
     (st === 'all' || r.status === st) && (task === 'all' || r.key === task) &&
@@ -25,7 +25,7 @@ export function AllWorklog() {
   const cnt = (s: St) => (rows ?? []).filter((r) => r.status === s).length
   return (
     <details className="card td-sec aw">
-      <summary><h2>Tất cả worklog</h2>{rows && <span className="td-n">{rows.length}</span>}</summary>
+      <summary><h2>Worklog ngày {date.slice(8, 10)}/{date.slice(5, 7)}</h2>{rows && <span className="td-n">{rows.length}</span>}</summary>
       <div className="td-body">
         {err && <p className="aw-block">{err}</p>}
         {rows && <>

@@ -118,11 +118,11 @@ export function SessionDock() {
 }
 
 /** Nhật ký phiên hiện tại (Amin 24/11): mỗi task một thẻ; trong thẻ liệt kê TỪNG sub-session (section) có việc hôm nay, mỗi cái Xong/Chưa xong riêng.
- *  Trạng thái task = Jira (không Done = Chưa xong), không suy từ sub-session. Chỉ hiện task/sub-session có việc TRONG NGÀY hôm nay (Amin 24/11). */
+ *  Trạng thái task = Jira (không Done = Chưa xong), không suy từ sub-session. Theo NGÀY đang xem trên trang Hôm nay (Amin 26/11): chỉ task/sub-session có việc trong ngày đó. */
 type AllItem = { key: string; item_id: string; date: string; section_id: string; section_name: string; status: WlStatus; action: string; actor: string }
-export function WorklogCards() {
+export function WorklogCards({ date }: { date: string }) {
   const all = useFetch<{ items: AllItem[] }>('/worklog/all')
-  const d = new Date(); const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const today = date
   const items = all.data?.items ?? []
   const doneKeys = new Set((DASH_SEED.done ?? []).map((t: { key: string }) => t.key))
   const title = new Map([...(DASH_SEED.tasks ?? []), ...(DASH_SEED.done ?? [])].map((t) => [t.key, t.t] as const))
@@ -141,10 +141,10 @@ export function WorklogCards() {
   }).sort((a, b) => Number(a.fin) - Number(b.fin) || a.key.localeCompare(b.key, 'en', { numeric: true }))
   return (
     <section className="card td-wl" aria-labelledby="wl-h">
-      <h2 id="wl-h">Nhật ký phiên hiện tại</h2>
+      <h2 id="wl-h">Nhật ký phiên · {today.slice(8, 10)}/{today.slice(5, 7)}</h2>
       {all.loading ? <p className="note">Đang đọc worklog…</p>
         : all.error ? <p className="err" role="alert">Không đọc được worklog: {all.error}. (Chỉ chạy được khi dev cục bộ có WORKING_ROOT.)</p>
-        : !cards.length ? <p className="note">Chưa có việc hôm nay: không task nào có worklog trong ngày.</p>
+        : !cards.length ? <p className="note">Ngày này chưa có worklog.</p>
         : (
           <div className="wl-cards">
             {cards.map((c) => (

@@ -251,7 +251,9 @@ export function SocialChannels({ store, onChange }: Props) {
   )
 }
 
-function Thumb({ src }: { src?: string }) {
+function Thumb({ src: raw }: { src?: string | string[] }) {
+  // media của bài có thể là một đường dẫn hoặc danh sách (copy từ video.media); lấy phần tử đầu
+  const src = Array.isArray(raw) ? raw.find((x) => typeof x === 'string' && x) : typeof raw === 'string' ? raw : undefined
   const [dur, setDur] = useState(0)
   const [playing, setPlaying] = useState(false)
   if (!src) return <div className="sp-thumb none">Chưa có</div>

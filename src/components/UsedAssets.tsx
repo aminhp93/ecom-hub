@@ -112,6 +112,23 @@ export function UsedInputs({ store, v, compact }: { store: Store; v: Video; comp
   ]
   const shown = compact ? items.slice(0, 0) : items
   if (!items.length) return <span className="note">Chưa xác minh đã dùng (không có input đã lưu)</span>
+  // KAN-132/P29: creative có inputMain (asset chính do Amin chọn) thì chỉ preview các asset đó; file còn lại gom vào "Input phụ" (thu gọn, chỉ tên file + vai trò)
+  const main = v.inputMain ?? []
+  const mainSet = new Set(main.map((m) => m.path))
+  const rest = items.filter((x) => !mainSet.has(x.path))
+  if (main.length) {
+    return (
+      <div className="ui-list">
+        <p className="note"><b>{main.length}</b> input chính · {rest.length} input phụ trong chi tiết</p>
+        {compact ? null : main.map((m) => <AssetRow key={m.path} a={{ path: m.path, role: m.role, ok: true }} />)}
+        {compact || !rest.length ? null : (
+          <details className="ui-more"><summary>Input phụ ({rest.length}) · prompt, nhạc, clip, ảnh neo phụ</summary>
+            {rest.map((a) => <div key={a.path} className="note"><a href={`/media/${enc(a.path)}`} target="_blank" rel="noreferrer">{a.path.split('/').pop()}</a> · {a.role}</div>)}
+          </details>
+        )}
+      </div>
+    )
+  }
   return (
     <div className="ui-list">
       <p className="note"><b>{items.filter((x) => x.ok).length}</b> file đã dùng/đã lưu{items.some((x) => !x.ok) ? ` · ${items.filter((x) => !x.ok).length} chưa xác minh` : ''}</p>

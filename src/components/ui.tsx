@@ -42,7 +42,13 @@ export function DriveLink({ src }: { src: string }) {
   return url ? <a href={url} target="_blank" rel="noreferrer">Mở trên Google Drive</a> : <span className="note">Chưa có link Drive</span>
 }
 
-export function Media({ src, drive }: { src?: string; drive?: boolean }) {
+export function Media({ src: raw, drive }: { src?: string | string[]; drive?: boolean }) {
+  // media có thể là một đường dẫn hoặc danh sách (bài social copy từ video.media): danh sách thì hiện từng file
+  if (Array.isArray(raw)) return <>{raw.filter((x) => typeof x === 'string' && x).map((x) => <Media key={x} src={x} drive={drive} />)}</>
+  return typeof raw === 'string' ? <MediaOne src={raw} drive={drive} /> : null
+}
+
+function MediaOne({ src, drive }: { src: string; drive?: boolean }) {
   const [bad, setBad] = useState(false)
   if (!src) return null
   const url = /^https?:/.test(src) ? src : `/media/${src.split('/').map(encodeURIComponent).join('/')}`

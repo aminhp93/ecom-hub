@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { Store, Video, VideoInput } from '../data/types'
 import { uid } from '../data/template'
 import { Modal } from './Modal'
@@ -9,6 +9,7 @@ import { CreativeRequestForm } from './CreativeRequestForm'
 import { groupCreatives } from '../data/creativeGroups'
 import type { CreativeGroup } from '../data/creativeGroups'
 import { UsedPrompt, UsedInputs } from './UsedAssets'
+import { ReviewCell } from './CreativeReviews'
 import { ConclusionCell, FlowAgentCell, GateCell, flowLabel } from './CreativeEval'
 import { ChecklistTable, ChecklistCount } from './ChecklistTable'
 import { checklistView, flowTextFix } from '../data/checklistView'
@@ -108,7 +109,7 @@ export function CreativeBoard({ store, onChange }: Props) {
   const isDraft = (v: Video) => v.draft ?? !v.media
   const drafts = actives.filter(isDraft).length
   // Draft (chưa có video) lên đầu, giữ nguyên thứ tự còn lại
-  const shown = [...actives.filter((v) => (filter === 'video' ? !!v.media : filter === 'draft' ? isDraft(v) : true))].sort((a, b) => Number(!isDraft(a)) - Number(!isDraft(b)))
+  const shown = [...actives.filter((v) => (filter === 'video' ? !!v.media : filter === 'draft' ? isDraft(v) : true))].sort((a, b) => (b.last_updated ?? '').localeCompare(a.last_updated ?? '') || (Number(b.id.match(/-(\d+)-\d+$/)?.[1] ?? 0) - Number(a.id.match(/-(\d+)-\d+$/)?.[1] ?? 0)) || b.id.localeCompare(a.id))
   const remove = (id: string) => onChange({ ...store, creative: store.creative.filter((x) => x.id !== id) })
 
   return (
@@ -130,36 +131,20 @@ export function CreativeBoard({ store, onChange }: Props) {
         <>
           {view === 'list' ? (
                 <div className="vlist-wrap">
-                  <table className="vlist">
+                  <table className="vlist vl-fit">
+                    <colgroup><col style={{ width: '11%' }} /><col style={{ width: '5%' }} /><col style={{ width: '5%' }} /><col style={{ width: '14%' }} /><col style={{ width: '9%' }} /><col style={{ width: '8%' }} /><col style={{ width: '11%' }} /><col style={{ width: '11%' }} /><col style={{ width: '10%' }} /><col style={{ width: '8%' }} /><col style={{ width: '8%' }} /></colgroup>
                     <thead><tr>
-                      <th>ID<span className="gh">kèm agent gen</span></th><th>Video</th><th>Draft</th><th>Angle / hook</th>
-                      <th>Prompt<span className="gh">kèm loại flow</span></th><th>Input<span className="gh">F3: asset đã dùng · F1/F2: ref</span></th>
-                      <th colSpan={3}>Checklist<span className="gh">Theo từng flow</span></th>
-                      <th>Kết luận</th><th>Social<span className="gh">đã tạo / đã đăng</span></th><th>last_updated</th><th />
+                      <th>ID</th><th>Video</th><th>Draft</th><th>Angle / hook</th><th>Prompt</th><th>Input</th><th>Checklist</th><th>Kết luận</th><th>Đánh giá</th><th>Social</th><th>Cập nhật</th>
                     </tr></thead>
                     <tbody>
                       {shown.map((v) => {
-                        if (!open.has(v.id)) return <CompactRow key={v.id} store={store} v={v} g={gOf.get(v.id)} onToggle={() => toggle(v.id)} onEdit={() => setEditing(v)} onRemove={() => { if (window.confirm(`Xóa ${v.id}?`)) remove(v.id) }} />
+                        const isOpen = open.has(v.id)
+                        const onRemove = () => { if (window.confirm(`Xóa ${v.id}?`)) remove(v.id) }
                         return (
-                          <tr key={v.id} className="vl-open" id={`row-${v.id}`}>
-                            <td className="vl-id"><button type="button" className="vl-tg open" onClick={() => toggle(v.id)} aria-expanded="true" aria-controls={`row-${v.id}`} aria-label={`Thu gọn chi tiết ${v.id}`} title="Thu gọn chi tiết"><span aria-hidden="true">▾</span></button><b>{v.id}</b><div className="vl-ag"><FlowAgentCell v={v} part="agent" /></div></td>
-                            <td className="vl-media">{v.media ? mediaList(v.media).map((m) => <Media key={m} src={m} />) : <div className="thumb">Chưa có</div>}</td>
-                            <td className="vl-draft">{isDraft(v) ? <Pill tone="warn">Draft</Pill> : <span className="note">—</span>}</td>
-                            <td className="vl-angle"><div className="vl-scroll"><div><b>Angle:</b> {v.angle || '—'}</div><div><b>Hook:</b> {v.hook || '—'}</div><VersionHistory store={store} g={gOf.get(v.id)} /></div></td>
-                            <td className="vl-prompt"><div className="vl-cell"><PromptCell store={store} v={v} /></div></td>
-                            <td className="vl-ref"><div className="vl-cell vl-cell-free">{v.inputs ? <InputList v={v} /> : <UsedInputs store={store} v={v} />}</div></td>
-                            {v.flowChecks ? <td className="vl-gate vl-fck" colSpan={3}><div className="vl-cell vl-cell-free"><ChecklistTable v={v} /></div></td> : (
-                              <>
-                                <td className="vl-gate"><div className="vl-cell"><span className="gh">Cổng A · Prompt (trước gen)</span><GateCell v={v} k="A" /></div></td>
-                                <td className="vl-gate"><div className="vl-cell"><span className="gh">Cổng C · Ảnh neo</span><GateCell v={v} k="C" /></div></td>
-                                <td className="vl-gate"><div className="vl-cell"><span className="gh">Cổng B · Video (sau gen)</span><GateCell v={v} k="B" /></div></td>
-                              </>
-                            )}
-                            <td className="vl-ready"><div className="vl-cell"><ConclusionCell store={store} v={v} /></div></td>
-                            <td className="vl-soc"><SocialCell store={store} v={v} /></td>
-                            <td className="vl-upd">{v.last_updated ?? <span className="note">—</span>}</td>
-                            <td className="vl-act"><button className="link" onClick={() => setEditing(v)}>Sửa</button><button className="link bad" onClick={() => { if (window.confirm(`Xóa ${v.id}?`)) remove(v.id) }}>Xóa</button></td>
-                          </tr>
+                          <Fragment key={v.id}>
+                            <CompactRow store={store} v={v} g={gOf.get(v.id)} isOpen={isOpen} onToggle={() => toggle(v.id)} />
+                            {isOpen && <DetailRow store={store} v={v} g={gOf.get(v.id)} onEdit={() => setEditing(v)} onRemove={onRemove} />}
+                          </Fragment>
                         )
                       })}
                     </tbody>
@@ -249,9 +234,9 @@ function VideoForm({ video, onSave, onDelete, onClose }: { video?: Video; onSave
   const [gB, setGB] = useState<GateState>(video?.gates?.B ?? 'Chưa review')
   const [costTokens, setCostTokens] = useState(video?.cost?.tokens ?? '')
   const [costLeft, setCostLeft] = useState(video?.cost?.tokensLeft ?? '')
-  const [costA, setCostA] = useState(video?.cost?.attempts.anchor ?? 0)
-  const [costC1, setCostC1] = useState(video?.cost?.attempts.clip1 ?? 0)
-  const [costC2, setCostC2] = useState(video?.cost?.attempts.clip2 ?? 0)
+  const [costA, setCostA] = useState(video?.cost?.attempts?.anchor ?? 0)
+  const [costC1, setCostC1] = useState(video?.cost?.attempts?.clip1 ?? 0)
+  const [costC2, setCostC2] = useState(video?.cost?.attempts?.clip2 ?? 0)
   const [costNote, setCostNote] = useState(video?.cost?.note ?? '')
 
   const save = () => {
@@ -428,7 +413,8 @@ function PromptCell({ store, v, compact }: { store: Store; v: Video; compact?: b
 // Chi phí gen: token + lượt thử (neo / clip 1 / clip 2). Chỉ hiển thị dữ liệu đã nhập, không tự tính.
 function costText(c: NonNullable<Video['cost']>) {
   const a = c.attempts
-  return `${c.tokens}${c.tokensLeft ? ` · còn ${c.tokensLeft}` : ''} · ${a.total} lượt (neo ${a.anchor}, clip 1: ${a.clip1}, clip 2: ${a.clip2})${c.note ? ` · ${c.note}` : ''}`
+  const tries = a ? ` · ${a.total ?? (a.anchor ?? 0) + (a.clip1 ?? 0) + (a.clip2 ?? 0)} lượt (neo ${a.anchor ?? 0}, clip 1: ${a.clip1 ?? 0}, clip 2: ${a.clip2 ?? 0})` : ''
+  return `${c.tokens ?? '—'}${c.tokensLeft ? ` · còn ${c.tokensLeft}` : ''}${tries}${c.note ? ` · ${c.note}` : ''}`
 }
 function CostLine({ v, full }: { v: Video; full?: boolean }) {
   const c = v.cost
@@ -437,27 +423,54 @@ function CostLine({ v, full }: { v: Video; full?: boolean }) {
 }
 
 // Hàng gọn: mỗi ô tối đa 1–2 dòng, chỉ tóm tắt; mở hàng để xem đủ.
-function CompactRow({ store, v, g, onToggle, onEdit, onRemove }: { store: Store; v: Video; g?: CreativeGroup; onToggle: () => void; onEdit: () => void; onRemove: () => void }) {
+function CompactRow({ store, v, g, isOpen, onToggle }: { store: Store; v: Video; g?: CreativeGroup; isOpen: boolean; onToggle: () => void }) {
   const ckBad = (checklistView(v)?.groups ?? []).flatMap((g) => g.rows).filter((r) => r.s === 'bad').map((r) => r.label)
   const label = v.verdict?.label ?? '—'
   const tone = label === 'Sẵn sàng' ? 'ok' : label === 'Chưa làm' || label === '—' ? 'idle' : 'bad'
   const nMedia = v.media ? mediaList(v.media).length : 0
   return (
-    <tr className="vl-cz" id={`row-${v.id}`}>
-      <td className="vl-id"><button type="button" className="vl-tg" onClick={onToggle} aria-expanded="false" aria-controls={`row-${v.id}`} aria-label={`Mở chi tiết ${v.id}`} title="Mở chi tiết"><span aria-hidden="true">▸</span></button><b>{v.id}</b><div className="vl-ag"><FlowAgentCell v={v} part="agent" /></div>{(g?.history.length ?? 0) + (v.archive?.length ?? 0) ? <span className="arch-b" title="Có version cũ trong Lịch sử phiên bản">+{(g?.history.length ?? 0) + (v.archive?.length ?? 0)} cũ</span> : null}</td>
+    <tr className={isOpen ? 'vl-cz vl-open' : 'vl-cz'} id={`row-${v.id}`}>
+      <td className="vl-id"><button type="button" className={isOpen ? 'vl-tg open' : 'vl-tg'} onClick={onToggle} aria-expanded={isOpen} aria-controls={`detail-${v.id}`} aria-label={isOpen ? `Thu gọn chi tiết ${v.id}` : `Mở chi tiết ${v.id}`} title={isOpen ? 'Thu gọn chi tiết' : 'Mở chi tiết'}><span aria-hidden="true">{isOpen ? '▾' : '▸'}</span></button><b>{v.id}</b><div className="vl-ag"><FlowAgentCell v={v} part="agent" /></div>{(g?.history.length ?? 0) + (v.archive?.length ?? 0) ? <span className="arch-b" title="Có version cũ trong Lịch sử phiên bản">+{(g?.history.length ?? 0) + (v.archive?.length ?? 0)} cũ</span> : null}</td>
       <td className="vl-media">{nMedia ? <Thumb list={mediaList(v.media!)} /> : <span className="note">Chưa có</span>}</td>
       <td className="vl-draft">{(v.draft ?? !v.media) ? <Pill tone="warn">Draft</Pill> : <span className="note">—</span>}</td>
       <td className="vl-angle"><div className="cz-clamp">{v.angle || v.hook || v.title || '—'}</div></td>
       <td className="vl-prompt"><PromptCell store={store} v={v} compact /></td>
       <td className="vl-ref">{v.inputs ? <span className="note">{v.inputs.length} input</span> : <UsedInputs store={store} v={v} compact />}</td>
-      <td className="vl-gate vl-fck" colSpan={3}>{v.flowChecks ? (
+      <td className="vl-gate vl-fck">{v.flowChecks ? (
         <div className="cz-ck"><ChecklistCount v={v} />{ckBad.length ? <span className="cz-clamp1 note">Không đạt: {ckBad.slice(0, 3).join(' · ')}</span> : null}</div>
       ) : <span className="note">{v.gates ? 'Cổng A/C/B cũ' : 'Chưa chấm'}</span>}</td>
       <td className="vl-ready"><Pill tone={tone}>{label}</Pill>{v.verdict?.gen ? <span className="note cz-gen">Gen: {v.verdict.gen}</span> : null}<CostLine v={v} /></td>
+      <td className="vl-rv"><ReviewCell v={v} compact /></td>
       <td className="vl-soc"><SocialCell store={store} v={v} /></td>
       <td className="vl-upd">{v.last_updated ?? <span className="note">—</span>}</td>
-      <td className="vl-act"><button className="link" onClick={onEdit}>Sửa</button><button className="link bad" onClick={onRemove}>Xóa</button></td>
     </tr>
   )
   void store
+}
+
+// Chi tiết đầy đủ nằm ở hàng riêng bên dưới hàng gọn, trải hết bề ngang bảng (bảng chính không phải cuộn ngang).
+function DetailRow({ store, v, g, onEdit, onRemove }: { store: Store; v: Video; g?: CreativeGroup; onEdit: () => void; onRemove: () => void }) {
+  return (
+    <tr className="vl-detail" id={`detail-${v.id}`}>
+      <td colSpan={11}>
+        <div className="vl-dgrid">
+          <section><h4>Video</h4><div className="vl-media">{v.media ? mediaList(v.media).map((m) => <Media key={m} src={m} />) : <span className="note">Chưa có</span>}</div></section>
+          <section><h4>Angle / hook</h4><div><b>Angle:</b> {v.angle || '—'}</div><div><b>Hook:</b> {v.hook || '—'}</div><VersionHistory store={store} g={g} /></section>
+          <section><h4>Prompt</h4><PromptCell store={store} v={v} /></section>
+          <section><h4>Input</h4>{v.inputs ? <InputList v={v} /> : <UsedInputs store={store} v={v} />}</section>
+          <section className="wide"><h4>Checklist</h4>{v.flowChecks ? <ChecklistTable v={v} /> : (
+            <div className="vl-gates">
+              <div><span className="gh">Cổng A · Prompt (trước gen)</span><GateCell v={v} k="A" /></div>
+              <div><span className="gh">Cổng C · Ảnh neo</span><GateCell v={v} k="C" /></div>
+              <div><span className="gh">Cổng B · Video (sau gen)</span><GateCell v={v} k="B" /></div>
+            </div>
+          )}</section>
+          <section><h4>Kết luận</h4><ConclusionCell store={store} v={v} /></section>
+          <section><h4>Đánh giá</h4><ReviewCell v={v} /></section>
+          <section><h4>Social</h4><SocialCell store={store} v={v} /></section>
+          <section className="vl-dact"><button className="link" onClick={onEdit}>Sửa</button><button className="link bad" onClick={onRemove}>Xóa</button></section>
+        </div>
+      </td>
+    </tr>
+  )
 }
