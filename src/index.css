@@ -1509,3 +1509,55 @@ ol.td-top li.on .td-tick input { accent-color: var(--ok); }
 .vl-dgrid section { max-height: 360px; overflow: auto; scrollbar-width: thin; }
 .vl-dgrid section.wide { max-height: 520px; }
 .vl-dgrid section.vl-dact { max-height: none; overflow: visible; }
+
+/* Market Research: tab theo store (KAN-135/P1) */
+.sr-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.sr-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.sr-stat { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.sr-stat b { font: 700 calc(22px * var(--fs)) var(--display, var(--body)); }
+.sr-assess { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.sr-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.sr-row { display: grid; grid-template-columns: 28px 1fr 96px; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.sr-row:last-child { border-bottom: 0; }
+.sr-rank { color: var(--muted); font-weight: 700; text-align: center; }
+.sr-bar { height: 6px; background: var(--soft); border-radius: 3px; margin-top: 4px; }
+.sr-bar span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.sr-num { text-align: right; display: flex; flex-direction: column; }
+.sr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.sr-card { border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 10px; background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.sr-card.sr-ok { border-left-color: #3a9d5d; } .sr-card.sr-warn { border-left-color: #d49a2a; } .sr-card.sr-bad { border-left-color: #c24b4b; }
+.sr-ct { display: flex; gap: 6px; }
+.sr-kpi { display: flex; gap: 12px; } .sr-kpi span { display: flex; flex-direction: column; } .sr-kpi small { color: var(--muted); font-size: calc(11px * var(--fs)); }
+
+/* Market Research 2 tab: tổng quan + bảng SP có ảnh */
+.sr-lead { font-size: 15px; margin: 0; max-width: 80ch; }
+.sr-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.sr-chart { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 14px; display: grid; gap: 8px; align-content: start; }
+.sr-chart h4 { margin: 0; font-size: 14px; }
+.sr-hbar { display: grid; grid-template-columns: minmax(110px, 38%) 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+.sr-hl small { color: var(--muted); }
+.sr-hv { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sr-bar { display: block; height: 8px; background: var(--soft); border-radius: 4px; overflow: hidden; }
+.sr-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.sr-bar > .sr-est { background: repeating-linear-gradient(45deg, var(--accent) 0 4px, transparent 4px 7px); }
+.sr-bar > .sr-now { background: var(--muted); }
+.sr-fc { display: grid; gap: 3px; }
+.sr-fc-h { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.sr-top5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.sr-t5 { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+.sr-img { object-fit: cover; border-radius: 6px; border: 1px solid var(--line); background: var(--soft); display: block; }
+.sr-img-none { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; }
+.sr-tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.sr-table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 980px; }
+.sr-table th, .sr-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.sr-table th { background: var(--soft); font-weight: 600; white-space: nowrap; }
+.sr-table td:nth-child(n+4):nth-child(-n+8) { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sr-pn { min-width: 220px; display: table-cell; }
+.sr-pn .badge { margin-left: 6px; }
+.sr-ordc { min-width: 120px; }
+.sr-ordc .sr-bar { margin-top: 4px; }
+.sr-chosen { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+
+.sr-ae { min-width: 150px; font-size: 12px; }
+.sr-aelinks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.sr-aelinks a { font-size: 11px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; color: var(--ink); background: var(--soft); }

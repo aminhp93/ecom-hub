@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { MarketSeen } from './MarketProducts'
+import { StoreResearch, STORES, type StoreId } from './StoreResearch'
 import { Modal } from '../components/Modal'
 import { imageFor, imageUrl } from '../data/industryImages'
 
@@ -225,12 +226,16 @@ function Avoid({ doc }: { doc: Doc }) {
   )
 }
 
-type Tab = 'seen' | 'industry'
+type Tab = StoreId | 'seen' | 'industry'
 const BASE = '#/market-research'
 // Route cũ: /tranh → tab Ngành; /run, /ket-qua, /quy-trinh → tab Sản phẩm đã xem
 const tabOf = (): Tab => {
   const h = window.location.hash
-  return h.startsWith(`${BASE}/nganh`) || h.startsWith(`${BASE}/tranh`) ? 'industry' : 'seen'
+  const st = STORES.find((x) => h.startsWith(`${BASE}/${x.id}`))
+  if (st) return st.id
+  if (h.startsWith(`${BASE}/nganh`) || h.startsWith(`${BASE}/tranh`)) return 'industry'
+  if (h.startsWith(`${BASE}/da-xem`) || h.startsWith(`${BASE}/run`) || h.startsWith(`${BASE}/ket-qua`) || h.startsWith(`${BASE}/quy-trinh`)) return 'seen'
+  return 'whiskerwall'
 }
 
 export function MarketResearch() {
@@ -241,7 +246,7 @@ export function MarketResearch() {
     window.addEventListener('hashchange', on)
     return () => window.removeEventListener('hashchange', on)
   }, [])
-  const go = (t: Tab) => { window.location.hash = t === 'seen' ? BASE : `${BASE}/nganh` }
+  const go = (t: Tab) => { window.location.hash = t === 'seen' ? `${BASE}/da-xem` : t === 'industry' ? `${BASE}/nganh` : `${BASE}/${t}` }
   return (
     <div className="stack">
       <div className="db-top">
@@ -251,10 +256,11 @@ export function MarketResearch() {
         </div>
       </div>
       <div className="tabs" role="tablist">
+        {STORES.map((x) => <button key={x.id} className="tab" role="tab" aria-selected={tab === x.id} onClick={() => go(x.id)}>{x.label}</button>)}
         <button className="tab" role="tab" aria-selected={tab === 'seen'} onClick={() => go('seen')}>Sản phẩm tôi đã xem</button>
         <button className="tab" role="tab" aria-selected={tab === 'industry'} onClick={() => go('industry')}>Ngành đang đề xuất</button>
       </div>
-      {tab === 'seen' ? <MarketSeen /> : err ? <p className="note">Không đọc được tài liệu Market Research (chỉ có khi chạy dev/preview với thư mục Working trên Drive): {err}</p> : !doc ? <p className="note">Đang đọc tài liệu…</p> : (
+      {tab === 'whiskerwall' || tab === 'aquanest' || tab === 'heartbond' ? <StoreResearch id={tab} /> : tab === 'seen' ? <MarketSeen /> : err ? <p className="note">Không đọc được tài liệu Market Research (chỉ có khi chạy dev/preview với thư mục Working trên Drive): {err}</p> : !doc ? <p className="note">Đang đọc tài liệu…</p> : (
         <div className="stack">
           <Industries doc={doc} />
           <hr />
