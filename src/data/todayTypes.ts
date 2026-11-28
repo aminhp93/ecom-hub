@@ -6,12 +6,21 @@ export interface TodayIdea { topic: string; t: string; kind: 'has-task' | 'no-ta
 export interface PlanEval { idea: number; verdict: 'first' | 'into-task' | 'new-task' | 'later' | 'done'; key?: string; state: string; today: 'yes' | 'wait' | 'no'; todayNote?: string; why: string }
 /** Summary theo task (giống sidebar): mỗi task một dòng, bên trong là việc hôm qua đã làm + còn dở/chờ + vướng. */
 export interface YTask { key?: string; title: string; state: 'done' | 'doing' | 'blocked' | 'idle'; did: string[]; left: string[]; block?: string[] }
+/** Nhật ký phiên dạng phẳng (Amin 28/11): MỘT bảng 3 cột Task | Tình hình | Còn mở, bên dưới đề xuất/cập nhật chung. */
+/** Một dòng checklist: s='ok' dấu tích xanh, 'no' dấu X đỏ, bỏ trống = chấm tròn thường. */
+export interface JournalLine { t: string; s?: 'ok' | 'no' }
+export interface DayJournal {
+  tasks: { key: string; title: string; status: JournalLine[]; open: JournalLine[] }[]
+  general: { label?: string; t: string }[]
+}
 export interface TodayTop extends TodayItem { done?: boolean }
 export interface TodayDay {
   date: string
   status: 'draft' | 'published'
   yesterday: { done: TodayItem[]; open: TodayItem[]; blockers: TodayItem[]; tasks?: YTask[]; planImpact?: TodayItem[]; timelineImpact?: TodayItem[] }
   ideas: TodayIdea[]
+  /** Nhật ký phiên của ngày (tuỳ chọn). Có thì thay danh sách worklog dạng thẻ. */
+  journal?: DayJournal
   plan: { top: TodayTop[]; intoTasks: TodayItem[]; parking: TodayItem[]; rhythm?: string; eval?: PlanEval[] }
   /** Timeline (tổng quan, cập nhật theo ngày): các task đang chạy còn lại + task vừa xong. */
   timeline?: TodayTimeline

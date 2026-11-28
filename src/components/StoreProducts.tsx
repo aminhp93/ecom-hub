@@ -26,7 +26,7 @@ export function StoreProducts({ store }: { store: Store }) {
           const im = mainImg(p)
           return (
             <div key={p.id} className="sprod-row">
-              {im ? <img className="sprod-img" src={`/media/${im.path}`} alt={p.name} /> : <span className="sprod-img" />}
+              {im ? <img className="sprod-img" src={(im.path.startsWith('http') ? im.path : `/media/${im.path}`)} alt={p.name} /> : <span className="sprod-img" />}
               <div className="sprod-name">
                 <b>{p.code}. {p.name}</b>
                 <span className="note">{p.summary}</span>
@@ -57,8 +57,8 @@ function ProductDetail({ p, onClose }: { p: StoreProduct; onClose: () => void })
       <div className="sprod-detail">
         <div className="pi-imgs">
           {p.images.map((im) => (
-            <a key={im.path} href={`/media/${im.path}`} target="_blank" rel="noreferrer" title={im.label}>
-              <img className="sprod-thumb" src={`/media/${im.path}`} alt={`${p.name} (${im.role})`} loading="lazy" />
+            <a key={im.path} href={(im.path.startsWith('http') ? im.path : `/media/${im.path}`)} target="_blank" rel="noreferrer" title={im.label}>
+              <img className="sprod-thumb" src={(im.path.startsWith('http') ? im.path : `/media/${im.path}`)} alt={`${p.name} (${im.role})`} loading="lazy" />
             </a>
           ))}
         </div>

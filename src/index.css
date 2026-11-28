@@ -1566,3 +1566,34 @@ ol.td-top li.on .td-tick input { accent-color: var(--ok); }
 .sr-mgb { display: grid; gap: 3px; }
 .sr-low { color: #b3261e; }
 @media (max-width: 720px) { .sr-mg { grid-template-columns: 1fr auto; } .sr-mgb { grid-column: 1 / -1; } }
+
+/* Nhật ký phiên dạng phẳng (Today, 28/11): một bảng 3 cột, chỉ kẻ ngang, không màu nhấn */
+.jr { gap: 10px; }
+.jr h3 { margin: 14px 0 4px; font-size: 1rem; }
+.jr-tbl { width: 100%; border-collapse: collapse; font-size: .95rem; line-height: 1.5; }
+.jr-tbl th { text-align: left; font-size: 1.05rem; padding: 8px 10px; border-bottom: 1px solid var(--line, #ddd); }
+.jr-tbl td { padding: 12px 10px; vertical-align: top; border-bottom: 1px solid var(--line, #e6e6e6); }
+.jr-tbl td:first-child { width: 17%; min-width: 120px; }
+.jr-tbl td:nth-child(2), .jr-tbl td:nth-child(3) { width: 41%; }
+.jr-tbl a { color: inherit; text-decoration: none; }
+.jr-gen { margin: 0; padding-left: 1.1em; }
+.jr-gen li { margin: .3em 0; font-size: .95rem; }
+.jr-ck { list-style: none; margin: 0; padding: 0; }
+.jr-ck li { display: flex; gap: 8px; margin: 0 0 .45em; }
+.jr-ck li:last-child { margin-bottom: 0; }
+.jr-mk { flex: 0 0 1.1em; text-align: center; font-weight: 700; color: var(--muted, #888); }
+.jr-ok .jr-mk { color: #1d7a46; }
+.jr-no .jr-mk { color: #c0392b; }
+@media (prefers-color-scheme: dark) { .jr-ok .jr-mk { color: #5fcf8a; } .jr-no .jr-mk { color: #ff8a80; } }
+/* Nhật ký phiên: hàng task xen kẽ hai màu nền để dễ nhìn (Amin 28/11) */
+.jr-tbl tbody tr:nth-child(odd) td { background: rgba(76, 175, 80, .24); }
+.jr-tbl tbody tr:nth-child(even) td { background: rgba(255, 193, 7, .26); }
+.jr-tbl tbody tr:first-child td:first-child { border-top-left-radius: 6px; }
+/* Trang Hôm nay: bỏ hết màu ở phần tiêu đề (5 thẻ phase + khung từng phần), chỉ còn trắng/xám/đen (Amin 28/11) */
+.td-ph0, .td-ph1, .td-ph2, .td-ph3, .td-ph4 { --ph: var(--muted); }
+@media (prefers-color-scheme: dark) { .td-ph0, .td-ph1, .td-ph2, .td-ph3, .td-ph4 { --ph: var(--muted); } }
+.td-phase { border-top: 1px solid var(--line); }
+.td-phase.on { box-shadow: none; border-color: var(--ink); background: var(--soft); }
+.td-phb { background: var(--ink); color: var(--surface); }
+.td-sec.td-ph { background: var(--surface); border-color: var(--line); border-left: 1px solid var(--line); }
+.td-phs .f-ok b, .td-phs .f-bad b, .td-phs .f-now b { color: var(--ink); }

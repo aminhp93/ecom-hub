@@ -286,7 +286,7 @@ const fmt = (n: number) => n.toLocaleString('en-US')
 const usd = (n: number) => (n < 0 ? '—' : '$' + (n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1) + 'k' : String(n)))
 const VERDICT = { ok: ['Giữ / chọn', 'ok'], warn: ['Cân nhắc', 'warn'], bad: ['Yếu', 'lb-q'] } as const
 const fmDetail = (id: string) => `https://www.fastmoss.com/e-commerce/detail/${id}`
-const imgOf = (id: string, px = 96) => (COVERS[id] ? `https://s.500fd.com/tt_product/${COVERS[id]}:${px}:${px}.webp` : '')
+const imgOf = (id: string) => (COVERS[id] ? `https://s.500fd.com/tt_product/${COVERS[id]}` : '')
 
 function Thumb({ id, size = 44 }: { id: string; size?: number }) {
   const [bad, setBad] = useState(false)

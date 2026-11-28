@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { TODAY_DAYS } from 'virtual:working-data'
 import { WorklogCards } from '../components/WorklogPanel'
+import { SessionJournal } from '../components/SessionJournal'
 import { AllWorklog } from '../components/AllWorklog'
 import { TimelinePlan } from '../components/TimelinePlan'
 import { DashAside } from './Dashboard'
@@ -256,7 +257,7 @@ export function Today() {
           </Sec>
         )}
       </div>
-      <WorklogCards date={day.date} />
+      {day.journal ? <SessionJournal j={day.journal} date={day.date} /> : <WorklogCards date={day.date} />}
       <div className="td-grid"><AllWorklog date={day.date} /></div>
     </>
   )
