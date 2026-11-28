@@ -1561,3 +1561,8 @@ ol.td-top li.on .td-tick input { accent-color: var(--ok); }
 .sr-ae { min-width: 150px; font-size: 12px; }
 .sr-aelinks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
 .sr-aelinks a { font-size: 11px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; color: var(--ink); background: var(--soft); }
+
+.sr-mg { display: grid; grid-template-columns: minmax(150px, 30%) 1fr minmax(150px, auto) 56px; gap: 8px; align-items: center; font-size: 13px; }
+.sr-mgb { display: grid; gap: 3px; }
+.sr-low { color: #b3261e; }
+@media (max-width: 720px) { .sr-mg { grid-template-columns: 1fr auto; } .sr-mgb { grid-column: 1 / -1; } }

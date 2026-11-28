@@ -9,6 +9,7 @@ import { ChecklistPanel } from '../components/ChecklistPanel'
 import { SocialChannels } from '../components/SocialChannels'
 import { ShopifyPreviewTab } from '../components/ShopifyPreviewTab'
 import { ResearchTab } from '../components/ResearchTab'
+import { StoreResearchProducts } from './StoreResearch'
 
 interface Props {
   store: Store
@@ -17,13 +18,14 @@ interface Props {
   onRemove: (id: string) => Promise<void>
 }
 
-type Tab = 'product' | 'research' | 'creative' | 'social' | 'shopify'
+type Tab = 'product' | 'mrsp' | 'research' | 'creative' | 'social' | 'shopify'
 
 export function StoreDetail({ store, onBack, onSave, onRemove }: Props) {
   const [tab, setTab] = useState<Tab>('product')
   const [dialog, setDialog] = useState<'edit' | 'delete' | null>(null)
   const tabs: Array<[Tab, string]> = [
     ['product', 'Store info'],
+    ['mrsp', 'Sản phẩm (Market Research)'],
     ['research', 'Nghiên cứu'],
     ['creative', 'Creative'],
     ['social', 'Social'],
@@ -59,6 +61,7 @@ export function StoreDetail({ store, onBack, onSave, onRemove }: Props) {
       <div className="stack">
         {tab === 'product' && !!store.products?.length && <StoreProducts store={store} />}
         {tab === 'product' && <ProductInfoTable store={store} onChange={onSave} />}
+        {tab === 'mrsp' && <StoreResearchProducts storeId={store.id} />}
         {tab === 'research' && <ResearchTab store={store} />}
         {tab === 'creative' && <CreativeBoard store={store} onChange={onSave} />}
         {tab === 'shopify' && <ShopifyPreviewTab store={store} />}

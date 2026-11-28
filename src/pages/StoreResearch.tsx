@@ -312,6 +312,34 @@ function Bars({ title, bars, note }: { title: string; bars: Bar[]; note?: string
   )
 }
 
+const mid = (p: string) => { const n = p.split('–').map(Number).filter((x) => !isNaN(x)); return n.length ? n.reduce((a, b) => a + b, 0) / n.length : NaN }
+function Margins({ s }: { s: Store }) {
+  const rows = s.picks.filter((p) => p.kind === 'mới' && p.id && SOURCING[p.id]?.items.length).map((p) => {
+    const v = SOURCING[p.id as string].items.map((i) => i.vnd / VND_PER_USD).sort((a, b) => a - b)
+    const lo = v[0], hi = v[v.length - 1], md = v[Math.floor((v.length - 1) / 2)], sell = mid(p.price)
+    return { p, lo, hi, md, sell, gap: sell - md }
+  })
+  if (!rows.length) return null
+  const mx = Math.max(...rows.map((r) => Math.max(r.sell, r.hi)))
+  return (
+    <section className="sr-chart">
+      <h4>Giá bán TikTok so với giá nhập AliExpress (tham khảo) <span className="badge lb-s">Suy luận</span></h4>
+      {rows.map((r) => (
+        <div key={r.p.id} className="sr-mg">
+          <span className="sr-hl">{r.p.name}</span>
+          <div className="sr-mgb">
+            <span className="sr-bar"><span style={{ width: `${(100 * r.sell) / mx}%` }} /></span>
+            <span className="sr-bar"><span className="sr-now" style={{ width: `${(100 * r.md) / mx}%` }} /></span>
+          </div>
+          <span className="sr-hv">bán ≈${r.sell.toFixed(0)} · nhập ≈${r.lo.toFixed(1)}–{r.hi.toFixed(1)}</span>
+          <b className={`sr-hv ${r.gap < 8 ? 'sr-low' : ''}`}>{r.gap >= 0 ? '+' : ''}{r.gap.toFixed(1)}$</b>
+        </div>
+      ))}
+      <p className="note">Thanh nâu = giá bán trung bình của đối thủ, thanh xám = giá nhập trung vị. Cột phải = chênh lệch thô (chưa trừ ship, phí sàn, ads, hoàn hàng). Listing AliExpress là hàng gần giống, không cùng SKU; nhiều giá $1,2 là giá sàn biến thể. Chưa xác minh.</p>
+    </section>
+  )
+}
+
 function Overview({ s }: { s: Store }) {
   const o = OV[s.id]
   const [more, setMore] = useState(false)
@@ -374,6 +402,7 @@ function Overview({ s }: { s: Store }) {
         </div>
         <p className="note">Danh sách đầy đủ ở tab Sản phẩm.</p>
       </section>
+      <Margins s={s} />
       <section className="sr-chart">
         <h4>Đánh giá và đề xuất <span className="badge lb-s">Suy luận</span></h4>
         <ul className="sr-assess">{[...s.assess, ...o.reco].map((a) => <li key={a}>{a}</li>)}</ul>
@@ -410,7 +439,7 @@ function ProdTable({ rows, chosen, mx }: { rows: Row[]; chosen: Set<string>; mx:
   return (
     <div className="sr-tw">
       <table className="sr-table">
-        <thead><tr><th>#</th><th>Ảnh</th><th>Sản phẩm</th><th>Giá $</th><th>Đơn 28 ngày</th><th>Đơn 90 ngày</th><th>GMV 28</th><th>GMV 90</th><th>Shop</th><th>product_id</th><th>Giá nhập AliExpress</th><th>Ghi chú</th></tr></thead>
+        <thead><tr><th>#</th><th>Ảnh</th><th>Sản phẩm</th><th>Giá bán $</th><th>Giá nhập AliExpress</th><th>Đơn 28 ngày</th><th>Đơn 90 ngày</th><th>GMV 28</th><th>GMV 90</th><th>Shop</th><th>product_id</th><th>Ghi chú</th></tr></thead>
         <tbody>
           {rows.map((x, i) => (
             <tr key={x.id} className={chosen.has(x.id) ? 'sr-chosen' : ''}>
@@ -418,13 +447,13 @@ function ProdTable({ rows, chosen, mx }: { rows: Row[]; chosen: Set<string>; mx:
               <td><Thumb id={x.id} /></td>
               <td className="sr-pn"><b>{x.n}</b>{chosen.has(x.id) && <span className="badge lb-s">Ứng viên</span>}</td>
               <td>{x.price}</td>
+              <td className="sr-ae"><Sourced id={x.id} /></td>
               <td className="sr-ordc"><b>{fmt(x.u28)}</b><span className="sr-bar"><span style={{ width: `${Math.max(2, (100 * x.u28) / mx)}%` }} /></span></td>
               <td>{fmt(x.u90)}</td>
               <td>{usd(x.g28)}</td>
               <td>{usd(x.g90)}</td>
               <td>{x.shop}</td>
               <td><a href={fmDetail(x.id)} target="_blank" rel="noreferrer"><code>{x.id}</code></a></td>
-              <td className="sr-ae"><Sourced id={x.id} /></td>
               <td className="note">{x.note ?? ''}</td>
             </tr>
           ))}
@@ -481,4 +510,11 @@ export function StoreResearch({ id }: { id: StoreId }) {
       {sub === 'ov' ? <Overview s={s} /> : <Products s={s} />}
     </div>
   )
+}
+
+/** Dùng ở trang store/<id>: danh sách SP từ Market Research (top 15 + ứng viên + giá nhập AliExpress), cùng dữ liệu với tab Sản phẩm. */
+export function StoreResearchProducts({ storeId }: { storeId: string }) {
+  const s = STORES.find((x) => x.id === storeId)
+  if (!s) return <p className="note">Store này chưa có danh sách sản phẩm từ Market Research.</p>
+  return <Products s={s} />
 }
